@@ -580,6 +580,7 @@ function StudentsTab({ students, updateStudents, sessions }) {
 
 
 // ---------- Smart Lesson Planner ----------
+// Lesson plans are generated from the student's profile and teaching history.
 function LessonPlanner({ student, sessions, duration, setDuration, onClose }) {
   const history = sessions.filter(x=>x.studentId===student.id).sort((a,b)=>b.date.localeCompare(a.date));
   const subject = student.subjects?.[0] || 'วิชาหลัก';
