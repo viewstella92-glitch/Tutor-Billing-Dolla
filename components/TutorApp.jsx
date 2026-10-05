@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { supabase } from '../lib/supabase';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import {
   LayoutDashboard, Users, CalendarDays, ClipboardList, Receipt, Download,
@@ -49,35 +50,102 @@ export default function App() {
   const [loaded, setLoaded] = useState(false);
   const [toast, setToast] = useState('');
 
+  const OWNER_ID = '7d7c0b4e-9f42-4a93-b8b4-7f5a7d6c1e21';
+
   useEffect(() => {
-    try {
-      const s = window.localStorage.getItem('tutor-app:students');
-      const sc = window.localStorage.getItem('tutor-app:schedule');
-      const se = window.localStorage.getItem('tutor-app:sessions');
-      if (s) setStudents(JSON.parse(s));
-      if (sc) setSchedule(JSON.parse(sc));
-      if (se) setSessions(JSON.parse(se));
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoaded(true);
-    }
+    const load = async () => {
+      try {
+        const [st, sc, se] = await Promise.all([
+          supabase.from('tutor_students').select('*').eq('user_id', OWNER_ID).order('created_at'),
+          supabase.from('tutor_schedule').select('*').eq('user_id', OWNER_ID),
+          supabase.from('tutor_sessions').select('*').eq('user_id', OWNER_ID).order('session_date', { ascending: false }),
+        ]);
+        if (st.error) throw st.error;
+        if (sc.error) throw sc.error;
+        if (se.error) throw se.error;
+
+        if (!st.data.length && !sc.data.length && !se.data.length) {
+          const legacy = JSON.parse(window.localStorage.getItem('tutor-app:students') || '[]');
+          const legacySchedule = JSON.parse(window.localStorage.getItem('tutor-app:schedule') || '[]');
+          const legacySessions = JSON.parse(window.localStorage.getItem('tutor-app:sessions') || '[]');
+          const idMap = new Map();
+          const studentsToInsert = legacy.map((s) => {
+            const id = crypto.randomUUID();
+            idMap.set(s.id, id);
+            return { id, user_id: OWNER_ID, name: s.name, rate: Number(s.rate) };
+          });
+          const scheduleToInsert = legacySchedule.map((s) => ({
+            id: crypto.randomUUID(), user_id: OWNER_ID, student_id: idMap.get(s.studentId) || null,
+            recurring: Boolean(s.recurring), day: s.recurring ? Number(s.day) : null,
+            date: s.recurring ? null : s.date, start_time: s.start, end_time: s.end,
+          }));
+          const slotMap = new Map();
+          legacySchedule.forEach((s, i) => slotMap.set(s.id, scheduleToInsert[i]?.id));
+          const sessionsToInsert = legacySessions.map((s) => ({
+            id: crypto.randomUUID(), user_id: OWNER_ID, student_id: idMap.get(s.studentId) || null,
+            student_name: s.studentName || '', session_date: s.date, hours: Number(s.hours),
+            rate: Number(s.rate), note: s.note || '', invoiced: Boolean(s.invoiced),
+            paid: Boolean(s.paid), source_slot_id: slotMap.get(s.sourceSlotId) || null,
+          }));
+          if (studentsToInsert.length) await supabase.from('tutor_students').insert(studentsToInsert);
+          if (scheduleToInsert.length) await supabase.from('tutor_schedule').insert(scheduleToInsert);
+          if (sessionsToInsert.length) await supabase.from('tutor_sessions').insert(sessionsToInsert);
+          try {
+            localStorage.removeItem('tutor-app:students');
+            localStorage.removeItem('tutor-app:schedule');
+            localStorage.removeItem('tutor-app:sessions');
+          } catch {}
+        }
+
+        const [a,b,c] = await Promise.all([
+          supabase.from('tutor_students').select('*').eq('user_id', OWNER_ID).order('created_at'),
+          supabase.from('tutor_schedule').select('*').eq('user_id', OWNER_ID),
+          supabase.from('tutor_sessions').select('*').eq('user_id', OWNER_ID).order('session_date', { ascending: false }),
+        ]);
+        setStudents((a.data || []).map((x) => ({ id:x.id, name:x.name, rate:Number(x.rate) })));
+        setSchedule((b.data || []).map((x) => ({ id:x.id, studentId:x.student_id, recurring:x.recurring, day:x.day ?? undefined, date:x.date ?? undefined, start:String(x.start_time).slice(0,5), end:String(x.end_time).slice(0,5) })));
+        setSessions((c.data || []).map((x) => ({ id:x.id, studentId:x.student_id, studentName:x.student_name || '', date:x.session_date, hours:Number(x.hours), rate:Number(x.rate), note:x.note || '', invoiced:Boolean(x.invoiced), paid:Boolean(x.paid), sourceSlotId:x.source_slot_id || undefined })));
+      } catch (e) {
+        console.error(e);
+        showToast('เชื่อมต่อฐานข้อมูลไม่สำเร็จ');
+      } finally {
+        setLoaded(true);
+      }
+    };
+    load();
   }, []);
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 2200); };
 
-  const persist = useCallback((key, value) => {
+  const updateStudents = async (next) => {
+    setStudents(next);
     try {
-      window.localStorage.setItem(`tutor-app:${key}`, JSON.stringify(value));
-    } catch (e) {
-      console.error(e);
-      showToast('บันทึกไม่สำเร็จ (พื้นที่จัดเก็บของเบราว์เซอร์อาจเต็ม)');
-    }
-  }, []);
+      const { data: old } = await supabase.from('tutor_students').select('id').eq('user_id', OWNER_ID);
+      const keep = new Set(next.map(x => x.id));
+      for (const row of old || []) if (!keep.has(row.id)) await supabase.from('tutor_students').delete().eq('id', row.id).eq('user_id', OWNER_ID);
+      if (next.length) await supabase.from('tutor_students').upsert(next.map(x => ({ id:x.id, user_id:OWNER_ID, name:x.name, rate:Number(x.rate) })));
+    } catch (e) { console.error(e); showToast('บันทึกนักเรียนไม่สำเร็จ'); }
+  };
 
-  const updateStudents = (next) => { setStudents(next); persist('students', next); };
-  const updateSchedule = (next) => { setSchedule(next); persist('schedule', next); };
-  const updateSessions = (next) => { setSessions(next); persist('sessions', next); };
+  const updateSchedule = async (next) => {
+    setSchedule(next);
+    try {
+      const { data: old } = await supabase.from('tutor_schedule').select('id').eq('user_id', OWNER_ID);
+      const keep = new Set(next.map(x => x.id));
+      for (const row of old || []) if (!keep.has(row.id)) await supabase.from('tutor_schedule').delete().eq('id', row.id).eq('user_id', OWNER_ID);
+      if (next.length) await supabase.from('tutor_schedule').upsert(next.map(x => ({ id:x.id, user_id:OWNER_ID, student_id:x.studentId, recurring:Boolean(x.recurring), day:x.recurring?Number(x.day):null, date:x.recurring?null:x.date, start_time:x.start, end_time:x.end })));
+    } catch (e) { console.error(e); showToast('บันทึกตารางสอนไม่สำเร็จ'); }
+  };
+
+  const updateSessions = async (next) => {
+    setSessions(next);
+    try {
+      const { data: old } = await supabase.from('tutor_sessions').select('id').eq('user_id', OWNER_ID);
+      const keep = new Set(next.map(x => x.id));
+      for (const row of old || []) if (!keep.has(row.id)) await supabase.from('tutor_sessions').delete().eq('id', row.id).eq('user_id', OWNER_ID);
+      if (next.length) await supabase.from('tutor_sessions').upsert(next.map(x => ({ id:x.id, user_id:OWNER_ID, student_id:x.studentId||null, student_name:x.studentName||'', session_date:x.date, hours:Number(x.hours), rate:Number(x.rate), note:x.note||'', invoiced:Boolean(x.invoiced), paid:Boolean(x.paid), source_slot_id:x.sourceSlotId||null })));
+    } catch (e) { console.error(e); showToast('บันทึกคาบสอนไม่สำเร็จ'); }
+  };
 
   const getStudent = (id) => students.find((s) => s.id === id);
 
@@ -247,8 +315,7 @@ function Dashboard({ students, sessions, schedule, updateSessions, getStudent, s
     const next = [
       ...sessions,
       { id: uid(), studentId: student.id, studentName: student.name, date: today, hours, rate: student.rate, note: '', invoiced: false, paid: false, sourceSlotId: slot.id },
-    ];    updateSessions(next);
-    showToast(`บันทึกคาบสอนของ ${student.name} แล้ว`);
+    ];    updateSessions(next);    showToast(`บันทึกคาบสอนของ ${student.name} แล้ว`);
   };
 
   return (
@@ -497,8 +564,7 @@ function ScheduleTab({ students, schedule, updateSchedule, sessions, updateSessi
       start: form.start,
       end: form.end,
     };    updateSchedule([...schedule, slot]);
-    setShowForm(false);
-  };
+    setShowForm(false);  };
 
   const removeSlot = (id) => {
     if (!confirm('ลบคาบนี้ออกจากตาราง?')) return;
@@ -747,8 +813,7 @@ function drawSummaryCard(canvas, { kicker, title, subtitle, rows, footerSmall, f
       ctx.strokeStyle = C.line;
       ctx.setLineDash([4, 4]);      ctx.beginPath();
       ctx.moveTo(24, y + rowH);
-      ctx.lineTo(width - 24, y + rowH);
-      ctx.stroke();
+      ctx.lineTo(width - 24, y + rowH);      ctx.stroke();
       ctx.setLineDash([]);
     }
     y += rowH;
@@ -998,7 +1063,6 @@ function InvoiceTab({ students, sessions, updateSessions, showToast }) {
     setSelected(new Set(candidates.map((c) => c.id)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [studentId, dateFrom, dateTo, sessions.length]);
-
   const student = students.find((s) => s.id === studentId);
   const chosen = candidates.filter((c) => selected.has(c.id));
   const totalHours = chosen.reduce((sum, c) => sum + c.hours, 0);
