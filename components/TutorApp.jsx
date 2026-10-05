@@ -542,6 +542,12 @@ function StudentsTab({ students, updateStudents, sessions }) {
 
       {historyStudent&&(()=>{const student=students.find(s=>s.id===historyStudent);const history=sessions.filter(s=>s.studentId===historyStudent).sort((a,b)=>b.date.localeCompare(a.date));const totalAll=history.reduce((sum,s)=>sum+s.hours*s.rate,0);return <Modal onClose={()=>setHistoryStudent(null)} title={`ประวัติการสอน · ${student?.name||''}`}>{history.length===0?<div style={{color:C.inkSoft}} className="text-sm">ยังไม่มีประวัติการสอน</div>:<><div style={{color:C.inkSoft}} className="text-xs mb-3">รวม {history.length} คาบ ตั้งแต่เริ่มเรียน · {fmtMoney(totalAll)}</div><div className="flex flex-col gap-1 max-h-80 overflow-y-auto">{history.map((s,i)=><div key={s.id} style={{borderBottom:i<history.length-1?`1px dashed ${C.line}`:'none'}} className="py-2 text-sm"><div className="flex items-center justify-between"><span className="font-medium">{fmtDateThai(s.date)} · {fmtHours(s.hours)} ชม.</span><span style={{color:C.gold}}>{fmtMoney(s.hours*s.rate)}</span></div>{s.note&&<div style={{color:C.inkSoft}} className="text-xs mt-0.5">{s.note}</div>}</div>)}</div></> }<div className="flex mt-4"><button onClick={()=>setHistoryStudent(null)} style={{border:`1px solid ${C.line}`,color:C.inkSoft}} className="flex-1 text-sm font-medium py-2 rounded-lg">ปิด</button></div></Modal>})()}
 
+      {typeof historyStudent === 'string' && historyStudent.startsWith('worksheet:') && (() => {
+        const student = students.find(s => s.id === historyStudent.slice(10));
+        if (!student) return null;
+        return <WorksheetGenerator student={student} sessions={sessions} onClose={()=>setHistoryStudent(null)} />;
+      })()}
+
       {typeof historyStudent === 'string' && historyStudent.startsWith('assistant:') && (() => {
         const student = students.find(s => s.id === historyStudent.slice(10));
         if (!student) return null;
@@ -587,6 +593,64 @@ function StudentsTab({ students, updateStudents, sessions }) {
   );
 }
 
+
+// ---------- Smart Worksheet Generator ----------
+function WorksheetGenerator({ student, sessions, onClose }) {
+  const subject = student.subjects?.[0] || 'วิชาหลัก';
+  const weakness = student.weaknesses || 'ทบทวนพื้นฐาน';
+  const [count,setCount] = useState(5);
+  const [level,setLevel] = useState('กลาง');
+
+  const build = () => {
+    if (subject.includes('คณิตศาสตร์')) {
+      const nums = level === 'ง่าย' ? [6,8,12,15,20] : level === 'ยาก' ? [18,24,35,42,56] : [8,12,15,18,25];
+      return Array.from({length:count},(_,i)=>{
+        const a=nums[i%nums.length], b=(i+2)*3;
+        return {q:(i+1)+'. จงหาค่าของ '+a+' + '+b+' × 2', a:a+b*2};
+      });
+    }
+    if (subject.includes('ฟิสิกส์')) {
+      return Array.from({length:count},(_,i)=>{
+        const v=(i+2)*5, t=i+1;
+        return {q:(i+1)+'. วัตถุเคลื่อนที่ด้วยความเร็ว '+v+' m/s เป็นเวลา '+t+' s จงหาระยะทางที่เคลื่อนที่ได้', a:v*t+' m'};
+      });
+    }
+    return Array.from({length:count},(_,i)=>({
+      q:(i+1)+'. อธิบายแนวคิดเรื่อง “'+weakness+'” ด้วยภาษาของตัวเอง และยกตัวอย่าง 1 ตัวอย่าง',
+      a:'คำตอบควรมีนิยาม/หลักการที่ถูกต้อง + ตัวอย่างที่สอดคล้อง'
+    }));
+  };
+
+  const items=build();
+  return (
+    <Modal onClose={onClose} title={'Worksheet · '+student.name}>
+      <div className="space-y-4">
+        <div style={{color:C.inkSoft}} className="text-xs">หัวข้อ: {weakness} · วิชา: {subject}</div>
+        <div className="grid grid-cols-2 gap-2">
+          <Field label="ระดับ">
+            <select value={level} onChange={e=>setLevel(e.target.value)} style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg">
+              <option>ง่าย</option><option>กลาง</option><option>ยาก</option>
+            </select>
+          </Field>
+          <Field label="จำนวนข้อ">
+            <select value={count} onChange={e=>setCount(Number(e.target.value))} style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg">
+              <option value={5}>5 ข้อ</option><option value={10}>10 ข้อ</option>
+            </select>
+          </Field>
+        </div>
+        <Card>
+          <div className="font-medium text-sm mb-3">โจทย์</div>
+          <div className="space-y-3">{items.map((x,i)=><div key={i} className="text-sm leading-relaxed">{x.q}</div>)}</div>
+        </Card>
+        <Card style={{background:C.pineTint}}>
+          <div className="font-medium text-sm mb-2">เฉลยสำหรับติวเตอร์</div>
+          <div className="space-y-1.5 text-sm">{items.map((x,i)=><div key={i}>{i+1}. {x.a}</div>)}</div>
+        </Card>
+        <div style={{color:C.inkSoft}} className="text-xs">Worksheet นี้สร้างจากวิชา + จุดอ่อนของนักเรียน · ยังไม่ใช้ LLM</div>
+      </div>
+    </Modal>
+  );
+}
 
 // ---------- AI Tutor Assistant ----------
 function TutorAssistant({ student, sessions, onClose, onPlanner }) {
@@ -670,6 +734,9 @@ function TutorAssistant({ student, sessions, onClose, onPlanner }) {
 
         <button onClick={onPlanner} style={{background:C.pine,color:C.paper}} className="w-full text-sm font-medium py-2.5 rounded-lg flex items-center justify-center gap-2">
           <ClipboardList size={16}/> สร้างแผนสอนคาบถัดไป
+        </button>
+        <button onClick={()=>setHistoryStudent('worksheet:'+student.id)} style={{border:`1px solid ${C.line}`,color:C.inkSoft}} className="w-full text-sm font-medium py-2.5 rounded-lg flex items-center justify-center gap-2">
+          <Brain size={16}/> สร้าง Worksheet
         </button>
       </div>
     </Modal>
