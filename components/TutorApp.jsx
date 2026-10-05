@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import {
   LayoutDashboard, Users, CalendarDays, ClipboardList, Receipt, Download,
-  Plus, Trash2, Check, Copy, X, Pencil, Circle, CheckCircle2, Send, Brain
+  Plus, Trash2, Check, Copy, X, Pencil, Circle, CheckCircle2, Send, Brain, TrendingUp, Bell
 } from 'lucide-react';
 
 // ---------- design tokens ----------
