@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import {
   LayoutDashboard, Users, CalendarDays, ClipboardList, Receipt, Download,
-  Plus, Trash2, Check, Copy, X, Pencil, Circle, CheckCircle2, Send
+  Plus, Trash2, Check, Copy, X, Pencil, Circle, CheckCircle2, Send, Brain
 } from 'lucide-react';
 
 // ---------- design tokens ----------
@@ -464,6 +464,27 @@ function StudentsTab({ students, updateStudents, sessions }) {
   };
   const remove = (id) => { if(confirm('ลบนักเรียนคนนี้? ประวัติการสอนเดิมจะยังอยู่')) updateStudents(students.filter(s=>s.id!==id)); };
   const subjectOptions=['คณิตศาสตร์','ฟิสิกส์','ภาษาอังกฤษ','ภาษาจีน','วิทยาศาสตร์'];
+  const buildAnalysis = (s) => {
+    const history = sessions.filter(x=>x.studentId===s.id).sort((a,b)=>a.date.localeCompare(b.date));
+    const scores = history.map(x => Number((x.note||'').match(/คะแนน[:： ]*(\\d+(?:\\.\\d+)?)/)?.[1])).filter(Number.isFinite);
+    const current = s.latestScore !== '' ? Number(s.latestScore) : (scores.length ? scores[scores.length-1] : null);
+    const baseline = s.baselineScore !== '' ? Number(s.baselineScore) : (scores.length ? scores[0] : null);
+    const progress = current != null && baseline != null ? current-baseline : null;
+    const target = s.targetScore !== '' ? Number(s.targetScore) : null;
+    const gap = target != null && current != null ? target-current : null;
+    const points = [];
+    if (progress !== null) points.push(progress > 0 ? `คะแนนเพิ่มขึ้น ${progress} คะแนนจากจุดเริ่มต้น` : progress < 0 ? `คะแนนลดลง ${Math.abs(progress)} คะแนน ควรหาสาเหตุจากข้อผิดพลาดล่าสุด` : 'คะแนนยังไม่เปลี่ยนจากจุดเริ่มต้น');
+    if (s.weaknesses) points.push(`ควรเน้นเรื่อง ${s.weaknesses}`);
+    if (gap !== null) points.push(gap > 0 ? `ยังห่างจากเป้าคะแนน ${gap} คะแนน` : 'ถึงหรือเกินเป้าคะแนนแล้ว');
+    if (history.length === 0) points.push('ยังมีข้อมูลการเรียนไม่มากพอ ควรบันทึกผลหลังแต่ละคาบ');
+    const recommendations = [];
+    if (s.weaknesses) recommendations.push(`เริ่มคลาสด้วยโจทย์สั้น ๆ เรื่อง ${s.weaknesses}`);
+    if (gap !== null && gap > 0) recommendations.push('แบ่งเป้าหมายเป็นโจทย์ระดับง่าย → กลาง → ข้อสอบจริง');
+    if (s.goals) recommendations.push(`เชื่อมโจทย์กับเป้าหมาย: ${s.goals}`);
+    if (s.learningStyle) recommendations.push(`ใช้วิธีที่นักเรียนตอบสนองได้ดี: ${s.learningStyle}`);
+    if (!recommendations.length) recommendations.push('เก็บคะแนนและบันทึกสิ่งที่ผิดในแต่ละคาบเพิ่ม เพื่อให้ระบบวิเคราะห์ได้แม่นขึ้น');
+    return { historyCount:history.length, current, baseline, target, progress, gap, points, recommendations };
+  };
 
   return (
     <div>
@@ -487,7 +508,7 @@ function StudentsTab({ students, updateStudents, sessions }) {
                 {(s.latestScore!==''||progress!==null)&&<div className="flex gap-3 mt-2 text-xs">{s.latestScore!==''&&<span>ล่าสุด <b>{s.latestScore}</b></span>}{progress!==null&&<span style={{color:progress>=0?C.pine:C.brick}}>{progress>=0?'↑':'↓'} {Math.abs(progress)} คะแนนจากจุดเริ่มต้น</span>}</div>}
                 {history.length>0&&<div style={{color:C.inkSoft}} className="text-xs mt-1">เรียนแล้ว {history.length} คาบ</div>}
               </div>
-              <div className="flex gap-1 shrink-0"><button onClick={()=>setHistoryStudent(s.id)} style={{color:C.inkSoft}} className="p-2 rounded-lg"><ClipboardList size={16}/></button><button onClick={()=>openEdit(s)} style={{color:C.inkSoft}} className="p-2 rounded-lg"><Pencil size={16}/></button><button onClick={()=>remove(s.id)} style={{color:C.brick}} className="p-2 rounded-lg"><Trash2 size={16}/></button></div>
+              <div className="flex gap-1 shrink-0"><button onClick={()=>setHistoryStudent(s.id)} style={{color:C.inkSoft}} className="p-2 rounded-lg"><ClipboardList size={16}/></button><button onClick={()=>setHistoryStudent(`analysis:${s.id}`)} style={{color:C.pine}} className="p-2 rounded-lg" title="วิเคราะห์นักเรียน"><Brain size={16}/></button><button onClick={()=>openEdit(s)} style={{color:C.inkSoft}} className="p-2 rounded-lg"><Pencil size={16}/></button><button onClick={()=>remove(s.id)} style={{color:C.brick}} className="p-2 rounded-lg"><Trash2 size={16}/></button></div>
             </div>
           </Card>;
         })}
@@ -519,6 +540,30 @@ function StudentsTab({ students, updateStudents, sessions }) {
       </Modal>}
 
       {historyStudent&&(()=>{const student=students.find(s=>s.id===historyStudent);const history=sessions.filter(s=>s.studentId===historyStudent).sort((a,b)=>b.date.localeCompare(a.date));const totalAll=history.reduce((sum,s)=>sum+s.hours*s.rate,0);return <Modal onClose={()=>setHistoryStudent(null)} title={`ประวัติการสอน · ${student?.name||''}`}>{history.length===0?<div style={{color:C.inkSoft}} className="text-sm">ยังไม่มีประวัติการสอน</div>:<><div style={{color:C.inkSoft}} className="text-xs mb-3">รวม {history.length} คาบ ตั้งแต่เริ่มเรียน · {fmtMoney(totalAll)}</div><div className="flex flex-col gap-1 max-h-80 overflow-y-auto">{history.map((s,i)=><div key={s.id} style={{borderBottom:i<history.length-1?`1px dashed ${C.line}`:'none'}} className="py-2 text-sm"><div className="flex items-center justify-between"><span className="font-medium">{fmtDateThai(s.date)} · {fmtHours(s.hours)} ชม.</span><span style={{color:C.gold}}>{fmtMoney(s.hours*s.rate)}</span></div>{s.note&&<div style={{color:C.inkSoft}} className="text-xs mt-0.5">{s.note}</div>}</div>)}</div></> }<div className="flex mt-4"><button onClick={()=>setHistoryStudent(null)} style={{border:`1px solid ${C.line}`,color:C.inkSoft}} className="flex-1 text-sm font-medium py-2 rounded-lg">ปิด</button></div></Modal>})()}
+
+      {typeof historyStudent === 'string' && historyStudent.startsWith('analysis:') && (() => {
+        const student = students.find(s => s.id === historyStudent.slice(9));
+        if (!student) return null;
+        const a = buildAnalysis(student);
+        return <Modal onClose={()=>setHistoryStudent(null)} title={`AI Analysis · ${student.name}`}>
+          <div className="space-y-3">
+            <Card style={{background:C.pineTint,borderColor:C.pine}}>
+              <div style={{color:C.pineDark}} className="text-xs font-medium mb-1">ภาพรวม</div>
+              <div className="text-sm">{a.current == null ? 'ยังไม่มีคะแนนที่ระบบใช้วิเคราะห์' : `คะแนนล่าสุด ${a.current}${a.target != null ? ` / เป้าหมาย ${a.target}` : ''}`}</div>
+              {a.progress !== null && <div style={{color:a.progress>=0?C.pine:C.brick}} className="text-xs mt-1">{a.progress>=0?'↑':'↓'} {Math.abs(a.progress)} คะแนนจากจุดเริ่มต้น</div>}
+            </Card>
+            <div>
+              <div className="font-medium text-sm mb-2">สิ่งที่ระบบมองเห็น</div>
+              <div className="space-y-1.5">{a.points.map((x,i)=><div key={i} className="text-sm flex gap-2"><span style={{color:C.pine}}>•</span><span>{x}</span></div>)}</div>
+            </div>
+            <div>
+              <div className="font-medium text-sm mb-2">คำแนะนำสำหรับคาบถัดไป</div>
+              <div className="space-y-1.5">{a.recommendations.map((x,i)=><div key={i} style={{background:C.paper}} className="text-sm p-2.5 rounded-lg border" >{i+1}. {x}</div>)}</div>
+            </div>
+            <div style={{color:C.inkSoft}} className="text-xs">อิงจากข้อมูลโปรไฟล์ + ประวัติการเรียน {a.historyCount} คาบในระบบ</div>
+          </div>
+        </Modal>;
+      })()}
     </div>
   );
 }
