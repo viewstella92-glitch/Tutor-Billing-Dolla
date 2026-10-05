@@ -72,7 +72,7 @@ export default function App() {
           const studentsToInsert = legacy.map((s) => {
             const id = crypto.randomUUID();
             idMap.set(s.id, id);
-            return { id, user_id: OWNER_ID, name: s.name, rate: Number(s.rate) };
+            return { id, user_id: OWNER_ID, name: s.name, rate: Number(s.rate), grade:s.grade||null, subjects:Array.isArray(s.subjects)?s.subjects:[], goals:s.goals||null, strengths:s.strengths||null, weaknesses:s.weaknesses||null, learning_style:s.learningStyle||null, notes:s.notes||null, status:s.status||'active', target_exam:s.targetExam||null, target_date:s.targetDate||null, baseline_score:s.baselineScore===''||s.baselineScore==null?null:Number(s.baselineScore), latest_score:s.latestScore===''||s.latestScore==null?null:Number(s.latestScore), target_score:s.targetScore===''||s.targetScore==null?null:Number(s.targetScore) };
           });
           const scheduleToInsert = legacySchedule.map((s) => ({
             id: crypto.randomUUID(), user_id: OWNER_ID, student_id: idMap.get(s.studentId) || null,
@@ -102,7 +102,7 @@ export default function App() {
           supabase.from('tutor_schedule').select('*').eq('user_id', OWNER_ID),
           supabase.from('tutor_sessions').select('*').eq('user_id', OWNER_ID).order('session_date', { ascending: false }),
         ]);
-        setStudents((a.data || []).map((x) => ({ id:x.id, name:x.name, rate:Number(x.rate) })));
+        setStudents((a.data || []).map((x) => ({ id:x.id, name:x.name, rate:Number(x.rate), grade:x.grade||'', subjects:Array.isArray(x.subjects)?x.subjects:[], goals:x.goals||'', strengths:x.strengths||'', weaknesses:x.weaknesses||'', learningStyle:x.learning_style||'', notes:x.notes||'', status:x.status||'active', targetExam:x.target_exam||'', targetDate:x.target_date||'', baselineScore:x.baseline_score==null?'':Number(x.baseline_score), latestScore:x.latest_score==null?'':Number(x.latest_score), targetScore:x.target_score==null?'':Number(x.target_score) })));
         setSchedule((b.data || []).map((x) => ({ id:x.id, studentId:x.student_id, recurring:x.recurring, day:x.day ?? undefined, date:x.date ?? undefined, start:String(x.start_time).slice(0,5), end:String(x.end_time).slice(0,5) })));
         setSessions((c.data || []).map((x) => ({ id:x.id, studentId:x.student_id, studentName:x.student_name || '', date:x.session_date, hours:Number(x.hours), rate:Number(x.rate), note:x.note || '', invoiced:Boolean(x.invoiced), paid:Boolean(x.paid), sourceSlotId:x.source_slot_id || undefined })));
       } catch (e) {
@@ -123,7 +123,7 @@ export default function App() {
       const { data: old } = await supabase.from('tutor_students').select('id').eq('user_id', OWNER_ID);
       const keep = new Set(next.map(x => x.id));
       for (const row of old || []) if (!keep.has(row.id)) await supabase.from('tutor_students').delete().eq('id', row.id).eq('user_id', OWNER_ID);
-      if (next.length) await supabase.from('tutor_students').upsert(next.map(x => ({ id:x.id, user_id:OWNER_ID, name:x.name, rate:Number(x.rate) })));
+      if (next.length) await supabase.from('tutor_students').upsert(next.map(x => ({ id:x.id, user_id:OWNER_ID, name:x.name, rate:Number(x.rate), grade:x.grade||null, subjects:Array.isArray(x.subjects)?x.subjects:[], goals:x.goals||null, strengths:x.strengths||null, weaknesses:x.weaknesses||null, learning_style:x.learningStyle||null, notes:x.notes||null, status:x.status||'active', target_exam:x.targetExam||null, target_date:x.targetDate||null, baseline_score:x.baselineScore===''||x.baselineScore==null?null:Number(x.baselineScore), latest_score:x.latestScore===''||x.latestScore==null?null:Number(x.latestScore), target_score:x.targetScore===''||x.targetScore==null?null:Number(x.targetScore) })));
     } catch (e) { console.error(e); showToast('บันทึกนักเรียนไม่สำเร็จ'); }
   };
 
@@ -446,103 +446,79 @@ function YearSummary({ sessions }) {
 
 // ---------- Students ----------
 function StudentsTab({ students, updateStudents, sessions }) {
-  const [editing, setEditing] = useState(null); // {id?, name, rate}
-  const [form, setForm] = useState({ name: '', rate: '' });
+  const emptyForm = { name:'', rate:'', grade:'', subjects:[], goals:'', strengths:'', weaknesses:'', learningStyle:'', notes:'', status:'active', targetExam:'', targetDate:'', baselineScore:'', latestScore:'', targetScore:'' };
+  const [editing, setEditing] = useState(null);
+  const [form, setForm] = useState(emptyForm);
   const [historyStudent, setHistoryStudent] = useState(null);
 
-  const openNew = () => { setForm({ name: '', rate: '' }); setEditing('new'); };
-  const openEdit = (s) => { setForm({ name: s.name, rate: String(s.rate) }); setEditing(s.id); };
+  const openNew = () => { setForm({ ...emptyForm }); setEditing('new'); };
+  const openEdit = (s) => { setForm({ ...emptyForm, ...s, subjects:Array.isArray(s.subjects)?s.subjects:[], baselineScore:s.baselineScore??'', latestScore:s.latestScore??'', targetScore:s.targetScore??'' }); setEditing(s.id); };
+  const toggleSubject = (subject) => setForm((f) => ({ ...f, subjects:f.subjects.includes(subject)?f.subjects.filter(x=>x!==subject):[...f.subjects,subject] }));
 
   const save = () => {
-    const name = form.name.trim();
-    const rate = parseFloat(form.rate);
-    if (!name || !rate || rate <= 0) return;
-    if (editing === 'new') {
-      updateStudents([...students, { id: uid(), name, rate }]);
-    } else {
-      updateStudents(students.map((s) => (s.id === editing ? { ...s, name, rate } : s)));
-    }
+    const name=form.name.trim(), rate=parseFloat(form.rate);
+    if (!name || !rate || rate<=0) return;
+    const student={ id:editing==='new'?uid():editing, name, rate, grade:form.grade.trim(), subjects:form.subjects, goals:form.goals.trim(), strengths:form.strengths.trim(), weaknesses:form.weaknesses.trim(), learningStyle:form.learningStyle, notes:form.notes.trim(), status:form.status, targetExam:form.targetExam.trim(), targetDate:form.targetDate, baselineScore:form.baselineScore===''?'':Number(form.baselineScore), latestScore:form.latestScore===''?'':Number(form.latestScore), targetScore:form.targetScore===''?'':Number(form.targetScore) };
+    updateStudents(editing==='new'?[...students,student]:students.map(s=>s.id===editing?{...s,...student}:s));
     setEditing(null);
   };
-
-  const remove = (id) => {
-    if (!confirm('ลบนักเรียนคนนี้? ประวัติการสอนเดิมจะยังอยู่')) return;
-    updateStudents(students.filter((s) => s.id !== id));
-  };
+  const remove = (id) => { if(confirm('ลบนักเรียนคนนี้? ประวัติการสอนเดิมจะยังอยู่')) updateStudents(students.filter(s=>s.id!==id)); };
+  const subjectOptions=['คณิตศาสตร์','ฟิสิกส์','ภาษาอังกฤษ','ภาษาจีน','วิทยาศาสตร์'];
 
   return (
     <div>
       <div className="flex items-center justify-between mb-5">
-        <SectionTitle sub="อัตราค่าสอนต่อชั่วโมง ตั้งได้เฉพาะรายคน">นักเรียน</SectionTitle>
-        <button onClick={openNew} style={{ background: C.pine, color: C.paper }} className="flex items-center gap-1.5 text-sm font-medium px-3 py-2 rounded-lg h-fit">
-          <Plus size={16} /> เพิ่มนักเรียน
-        </button>
+        <SectionTitle sub="เก็บข้อมูลที่ช่วยให้ระบบวิเคราะห์การเรียนของแต่ละคนได้">นักเรียน</SectionTitle>
+        <button onClick={openNew} style={{background:C.pine,color:C.paper}} className="flex items-center gap-1.5 text-sm font-medium px-3 py-2 rounded-lg h-fit"><Plus size={16}/> เพิ่มนักเรียน</button>
+      </div>
+      {students.length===0 && <EmptyState text="ยังไม่มีนักเรียน กดปุ่ม 'เพิ่มนักเรียน' เพื่อเริ่มต้น" />}
+      <div className="flex flex-col gap-3">
+        {students.map((s)=>{
+          const history=sessions.filter(x=>x.studentId===s.id).sort((a,b)=>a.date.localeCompare(b.date));
+          const progress=s.baselineScore!==''&&s.latestScore!==''?Number(s.latestScore)-Number(s.baselineScore):null;
+          return <Card key={s.id}>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap"><div className="font-medium">{s.name}</div>{s.grade&&<span style={{background:C.paperDeep,color:C.inkSoft}} className="text-xs px-2 py-0.5 rounded-full">{s.grade}</span>}<span style={{background:s.status==='active'?C.pineTint:C.paperDeep,color:s.status==='active'?C.pineDark:C.inkSoft}} className="text-xs px-2 py-0.5 rounded-full">{s.status==='active'?'กำลังเรียน':s.status==='paused'?'พักเรียน':'จบคอร์ส'}</span></div>
+                <div style={{color:C.gold}} className="text-sm">{fmtMoney(s.rate)} / ชม.</div>
+                {s.subjects?.length>0&&<div style={{color:C.inkSoft}} className="text-xs mt-1">{s.subjects.join(' · ')}</div>}
+                {s.goals&&<div className="text-xs mt-1"><span style={{color:C.inkSoft}}>เป้าหมาย:</span> {s.goals}</div>}
+                {s.weaknesses&&<div style={{color:C.brick}} className="text-xs mt-1">จุดที่ต้องเน้น: {s.weaknesses}</div>}
+                {(s.latestScore!==''||progress!==null)&&<div className="flex gap-3 mt-2 text-xs">{s.latestScore!==''&&<span>ล่าสุด <b>{s.latestScore}</b></span>}{progress!==null&&<span style={{color:progress>=0?C.pine:C.brick}}>{progress>=0?'↑':'↓'} {Math.abs(progress)} คะแนนจากจุดเริ่มต้น</span>}</div>}
+                {history.length>0&&<div style={{color:C.inkSoft}} className="text-xs mt-1">เรียนแล้ว {history.length} คาบ</div>}
+              </div>
+              <div className="flex gap-1 shrink-0"><button onClick={()=>setHistoryStudent(s.id)} style={{color:C.inkSoft}} className="p-2 rounded-lg"><ClipboardList size={16}/></button><button onClick={()=>openEdit(s)} style={{color:C.inkSoft}} className="p-2 rounded-lg"><Pencil size={16}/></button><button onClick={()=>remove(s.id)} style={{color:C.brick}} className="p-2 rounded-lg"><Trash2 size={16}/></button></div>
+            </div>
+          </Card>;
+        })}
       </div>
 
-      {students.length === 0 && <EmptyState text="ยังไม่มีนักเรียน กดปุ่ม 'เพิ่มนักเรียน' เพื่อเริ่มต้น" />}
+      {editing&&<Modal onClose={()=>setEditing(null)} title={editing==='new'?'เพิ่มนักเรียน':'ข้อมูลนักเรียน'}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <Field label="ชื่อนักเรียน"><input value={form.name} onChange={e=>setForm({...form,name:e.target.value})} placeholder="เช่น น้องมิว" style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg"/></Field>
+          <Field label="อัตราค่าสอน (บาท/ชม.)"><input type="number" value={form.rate} onChange={e=>setForm({...form,rate:e.target.value})} placeholder="400" style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg"/></Field>
+          <Field label="ระดับชั้น"><input value={form.grade} onChange={e=>setForm({...form,grade:e.target.value})} placeholder="ม.3 / ม.6 / มหาวิทยาลัย" style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg"/></Field>
+          <Field label="สถานะ"><select value={form.status} onChange={e=>setForm({...form,status:e.target.value})} style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg"><option value="active">กำลังเรียน</option><option value="paused">พักเรียน</option><option value="completed">จบคอร์ส</option></select></Field>
+        </div>
+        <Field label="วิชาที่เรียน"><div className="flex flex-wrap gap-2">{subjectOptions.map(x=><button type="button" key={x} onClick={()=>toggleSubject(x)} style={form.subjects.includes(x)?{background:C.pineTint,color:C.pineDark,borderColor:C.pine}:{borderColor:C.line,color:C.inkSoft}} className="text-xs px-3 py-1.5 rounded-full border">{x}</button>)}</div></Field>
+        <Field label="เป้าหมายการเรียน"><input value={form.goals} onChange={e=>setForm({...form,goals:e.target.value})} placeholder="เช่น เตรียมสอบเข้า / เพิ่มเกรด / ปูพื้นฐาน" style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg"/></Field>
+        <Field label="จุดแข็ง"><input value={form.strengths} onChange={e=>setForm({...form,strengths:e.target.value})} placeholder="เช่น คำนวณเร็ว เข้าใจแนวคิด" style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg"/></Field>
+        <Field label="จุดที่ต้องเน้น"><input value={form.weaknesses} onChange={e=>setForm({...form,weaknesses:e.target.value})} placeholder="เช่น โจทย์ปัญหา กราฟ" style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg"/></Field>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <Field label="คะแนนตั้งต้น"><input type="number" min="0" max="100" value={form.baselineScore} onChange={e=>setForm({...form,baselineScore:e.target.value})} placeholder="55" style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg"/></Field>
+          <Field label="คะแนนล่าสุด"><input type="number" min="0" max="100" value={form.latestScore} onChange={e=>setForm({...form,latestScore:e.target.value})} placeholder="72" style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg"/></Field>
+          <Field label="เป้าคะแนน"><input type="number" min="0" max="100" value={form.targetScore} onChange={e=>setForm({...form,targetScore:e.target.value})} placeholder="85" style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg"/></Field>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <Field label="เป้าหมายสอบ"><input value={form.targetExam} onChange={e=>setForm({...form,targetExam:e.target.value})} placeholder="เช่น TGAT / HSK 4 / กลางภาค" style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg"/></Field>
+          <Field label="วันที่เป้าหมาย"><input type="date" value={form.targetDate} onChange={e=>setForm({...form,targetDate:e.target.value})} style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg"/></Field>
+        </div>
+        <Field label="สไตล์การเรียน / วิธีที่ได้ผล"><input value={form.learningStyle} onChange={e=>setForm({...form,learningStyle:e.target.value})} placeholder="เช่น ชอบภาพ ชอบทำโจทย์ ชอบให้ยกตัวอย่าง" style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg"/></Field>
+        <Field label="โน้ตสำหรับติวเตอร์"><textarea value={form.notes} onChange={e=>setForm({...form,notes:e.target.value})} placeholder="ข้อมูลสำคัญเกี่ยวกับนักเรียน" style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg min-h-20"/></Field>
+        <ModalActions onCancel={()=>setEditing(null)} onSave={save}/>
+      </Modal>}
 
-      <div className="flex flex-col gap-2">
-        {students.map((s) => (
-          <Card key={s.id} className="flex items-center justify-between">
-            <div>
-              <div className="font-medium">{s.name}</div>
-              <div style={{ color: C.gold }} className="text-sm">{fmtMoney(s.rate)} / ชม.</div>
-            </div>
-            <div className="flex gap-2">
-              <button onClick={() => setHistoryStudent(s.id)} style={{ color: C.inkSoft }} className="p-2 rounded-lg"><ClipboardList size={16} /></button>
-              <button onClick={() => openEdit(s)} style={{ color: C.inkSoft }} className="p-2 rounded-lg"><Pencil size={16} /></button>
-              <button onClick={() => remove(s.id)} style={{ color: C.brick }} className="p-2 rounded-lg"><Trash2 size={16} /></button>
-            </div>
-          </Card>
-        ))}
-      </div>
-
-      {editing && (
-        <Modal onClose={() => setEditing(null)} title={editing === 'new' ? 'เพิ่มนักเรียน' : 'แก้ไขนักเรียน'}>
-          <Field label="ชื่อนักเรียน">
-            <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="เช่น น้องมิว" style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg" />
-          </Field>
-          <Field label="อัตราค่าสอน (บาท/ชม.)">
-            <input type="number" value={form.rate} onChange={(e) => setForm({ ...form, rate: e.target.value })} placeholder="400" style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg" />
-          </Field>
-          <ModalActions onCancel={() => setEditing(null)} onSave={save} />
-        </Modal>
-      )}
-
-      {historyStudent && (() => {
-        const student = students.find((s) => s.id === historyStudent);
-        const history = sessions
-          .filter((s) => s.studentId === historyStudent)
-          .sort((a, b) => b.date.localeCompare(a.date));
-        const totalAll = history.reduce((sum, s) => sum + s.hours * s.rate, 0);
-        return (
-          <Modal onClose={() => setHistoryStudent(null)} title={`ประวัติการสอน · ${student?.name || ''}`}>
-            {history.length === 0 ? (
-              <div style={{ color: C.inkSoft }} className="text-sm">ยังไม่มีประวัติการสอน</div>
-            ) : (
-              <>
-                <div style={{ color: C.inkSoft }} className="text-xs mb-3">
-                  รวม {history.length} คาบ ตั้งแต่เริ่มเรียน · {fmtMoney(totalAll)}
-                </div>
-                <div className="flex flex-col gap-1 max-h-80 overflow-y-auto">
-                  {history.map((s, i) => (
-                    <div key={s.id} style={{ borderBottom: i < history.length - 1 ? `1px dashed ${C.line}` : 'none' }} className="py-2 text-sm">
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium">{fmtDateThai(s.date)} · {fmtHours(s.hours)} ชม.</span>
-                        <span style={{ color: C.gold }}>{fmtMoney(s.hours * s.rate)}</span>
-                      </div>
-                      {s.note && <div style={{ color: C.inkSoft }} className="text-xs mt-0.5">{s.note}</div>}
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-            <div className="flex mt-4">
-              <button onClick={() => setHistoryStudent(null)} style={{ border: `1px solid ${C.line}`, color: C.inkSoft }} className="flex-1 text-sm font-medium py-2 rounded-lg">ปิด</button>
-            </div>
-          </Modal>
-        );
-      })()}
+      {historyStudent&&(()=>{const student=students.find(s=>s.id===historyStudent);const history=sessions.filter(s=>s.studentId===historyStudent).sort((a,b)=>b.date.localeCompare(a.date));const totalAll=history.reduce((sum,s)=>sum+s.hours*s.rate,0);return <Modal onClose={()=>setHistoryStudent(null)} title={`ประวัติการสอน · ${student?.name||''}`}>{history.length===0?<div style={{color:C.inkSoft}} className="text-sm">ยังไม่มีประวัติการสอน</div>:<><div style={{color:C.inkSoft}} className="text-xs mb-3">รวม {history.length} คาบ ตั้งแต่เริ่มเรียน · {fmtMoney(totalAll)}</div><div className="flex flex-col gap-1 max-h-80 overflow-y-auto">{history.map((s,i)=><div key={s.id} style={{borderBottom:i<history.length-1?`1px dashed ${C.line}`:'none'}} className="py-2 text-sm"><div className="flex items-center justify-between"><span className="font-medium">{fmtDateThai(s.date)} · {fmtHours(s.hours)} ชม.</span><span style={{color:C.gold}}>{fmtMoney(s.hours*s.rate)}</span></div>{s.note&&<div style={{color:C.inkSoft}} className="text-xs mt-0.5">{s.note}</div>}</div>)}</div></> }<div className="flex mt-4"><button onClick={()=>setHistoryStudent(null)} style={{border:`1px solid ${C.line}`,color:C.inkSoft}} className="flex-1 text-sm font-medium py-2 rounded-lg">ปิด</button></div></Modal>})()}
     </div>
   );
 }
