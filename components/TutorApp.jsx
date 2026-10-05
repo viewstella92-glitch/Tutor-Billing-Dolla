@@ -1436,19 +1436,44 @@ function CalendarTab({ students, schedule, showToast }) {
 // ---------- Sessions log ----------
 function SessionsTab({ students, sessions, updateSessions, getStudent, showToast }) {
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ studentId: '', date: todayStr(), hours: '1', note: '' });
+  const [form, setForm] = useState({
+    studentId: '', date: todayStr(), hours: '1',
+    subject: '', topic: '', performance: '', score: '', stuck: '', homework: '', note: ''
+  });
 
   const sorted = [...sessions].sort((a, b) => b.date.localeCompare(a.date));
+  const student = getStudent(form.studentId);
+
+  const resetForm = () => setForm({
+    studentId: '', date: todayStr(), hours: '1',
+    subject: '', topic: '', performance: '', score: '', stuck: '', homework: '', note: ''
+  });
+
+  const buildSmartNote = () => {
+    const parts = [];
+    if (form.subject || form.topic) parts.push(`สอน: ${[form.subject, form.topic].filter(Boolean).join(' · ')}`);
+    if (form.performance) parts.push(`ผลการเรียน: ${form.performance}`);
+    if (form.score) parts.push(`คะแนน: ${form.score}`);
+    if (form.stuck) parts.push(`ติดขัด: ${form.stuck}`);
+    if (form.homework) parts.push(`การบ้าน: ${form.homework}`);
+    if (form.note) parts.push(form.note);
+    return parts.join(' | ');
+  };
 
   const addManual = () => {
-    const student = getStudent(form.studentId);
     if (!student || !form.hours) return;
+    const smartNote = buildSmartNote();
     updateSessions([
       ...sessions,
-      { id: uid(), studentId: student.id, studentName: student.name, date: form.date, hours: Number(form.hours), rate: student.rate, note: form.note, invoiced: false, paid: false },
+      {
+        id: uid(), studentId: student.id, studentName: student.name,
+        date: form.date, hours: Number(form.hours), rate: student.rate,
+        note: smartNote, invoiced: false, paid: false
+      },
     ]);
     setShowForm(false);
-    setForm({ studentId: '', date: todayStr(), hours: '1', note: '' });
+    resetForm();
+    showToast('บันทึกคาบสอนแล้ว');
   };
 
   const togglePaid = (s) => updateSessions(sessions.map((x) => (x.id === s.id ? { ...x, paid: !x.paid } : x)));
@@ -1457,10 +1482,12 @@ function SessionsTab({ students, sessions, updateSessions, getStudent, showToast
     updateSessions(sessions.filter((s) => s.id !== id));
   };
 
+  const preview = buildSmartNote();
+
   return (
     <div>
       <div className="flex items-center justify-between mb-5">
-        <SectionTitle sub="ประวัติคาบสอนทั้งหมด เรียงจากล่าสุด">บันทึกคาบสอน</SectionTitle>
+        <SectionTitle sub="บันทึกสิ่งที่สอน ผลการเรียน และสิ่งที่ต้องติดตาม">บันทึกคาบสอน</SectionTitle>
         <button onClick={() => setShowForm(true)} disabled={students.length === 0} style={{ background: C.pine, color: C.paper }} className="flex items-center gap-1.5 text-sm font-medium px-3 py-2 rounded-lg h-fit disabled:opacity-40">
           <Plus size={16} /> เพิ่มคาบสอน
         </button>
@@ -1475,7 +1502,8 @@ function SessionsTab({ students, sessions, updateSessions, getStudent, showToast
             <div key={s.id} style={{ borderBottom: i < sorted.length - 1 ? `1px dashed ${C.line}` : 'none' }} className="flex items-center justify-between py-3 gap-3">
               <div className="min-w-0">
                 <div className="text-sm font-medium">{name}</div>
-                <div style={{ color: C.inkSoft }} className="text-xs">{fmtDateThai(s.date)} · {fmtHours(s.hours)} ชม. {s.note && `· ${s.note}`}</div>
+                <div style={{ color: C.inkSoft }} className="text-xs">{fmtDateThai(s.date)} · {fmtHours(s.hours)} ชม.</div>
+                {s.note && <div style={{ color: C.inkSoft }} className="text-xs mt-1 leading-relaxed">{s.note}</div>}
               </div>
               <div className="flex items-center gap-3 shrink-0">
                 <span style={{ color: C.gold }} className="text-sm font-medium">{fmtMoney(s.hours * s.rate)}</span>
@@ -1491,23 +1519,56 @@ function SessionsTab({ students, sessions, updateSessions, getStudent, showToast
       </div>
 
       {showForm && (
-        <Modal onClose={() => setShowForm(false)} title="เพิ่มคาบสอน">
+        <Modal onClose={() => setShowForm(false)} title="บันทึกคาบสอน">
           <Field label="นักเรียน">
             <select value={form.studentId} onChange={(e) => setForm({ ...form, studentId: e.target.value })} style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg">
               <option value="">เลือกนักเรียน</option>
               {students.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           </Field>
-          <Field label="วันที่">
-            <input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg" />
-          </Field>
-          <Field label="จำนวนชั่วโมง">
-            <input type="number" step="0.25" value={form.hours} onChange={(e) => setForm({ ...form, hours: e.target.value })} style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg" />
-          </Field>
-          <Field label="โน้ต (ไม่บังคับ)">
-            <input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="สอนอะไรไปบ้าง" style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg" />
-          </Field>
-          <ModalActions onCancel={() => setShowForm(false)} onSave={addManual} />
+
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="วันที่">
+              <input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg" />
+            </Field>
+            <Field label="จำนวนชั่วโมง">
+              <input type="number" step="0.25" value={form.hours} onChange={(e) => setForm({ ...form, hours: e.target.value })} style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg" />
+            </Field>
+          </div>
+
+          <div style={{ background: C.pineTint, border: `1px solid ${C.line}` }} className="rounded-xl p-3 mb-3">
+            <div className="text-sm font-medium mb-2" style={{ color: C.pineDark }}>สรุปคาบนี้</div>
+            <Field label="วิชา">
+              <input value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} placeholder={student?.subjects?.[0] || 'เช่น คณิตศาสตร์'} style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg" />
+            </Field>
+            <Field label="เรื่องที่สอน">
+              <input value={form.topic} onChange={(e) => setForm({ ...form, topic: e.target.value })} placeholder="เช่น สมการกำลังสอง" style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg" />
+            </Field>
+            <Field label="ผลการเรียน / ทำได้แค่ไหน">
+              <input value={form.performance} onChange={(e) => setForm({ ...form, performance: e.target.value })} placeholder="เช่น ทำโจทย์พื้นฐานได้ แต่ยังพลาดตอนประยุกต์" style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg" />
+            </Field>
+            <Field label="คะแนน (ถ้ามี)">
+              <input type="number" min="0" max="100" value={form.score} onChange={(e) => setForm({ ...form, score: e.target.value })} placeholder="เช่น 72" style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg" />
+            </Field>
+            <Field label="จุดที่ยังติด">
+              <input value={form.stuck} onChange={(e) => setForm({ ...form, stuck: e.target.value })} placeholder="เช่น แยกโจทย์ไม่ออกว่าใช้สูตรไหน" style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg" />
+            </Field>
+            <Field label="การบ้าน / สิ่งที่ต้องทำต่อ">
+              <input value={form.homework} onChange={(e) => setForm({ ...form, homework: e.target.value })} placeholder="เช่น ทำแบบฝึกหัดข้อ 1–10" style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg" />
+            </Field>
+            <Field label="โน้ตเพิ่มเติม">
+              <input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="ถ้ามี" style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg" />
+            </Field>
+          </div>
+
+          {preview && (
+            <div className="mb-2">
+              <div className="text-xs mb-1" style={{ color: C.inkSoft }}>ตัวอย่างบันทึกที่จะถูกเก็บในประวัติ</div>
+              <div style={{ background: C.paper, border: `1px solid ${C.line}` }} className="rounded-lg p-3 text-xs leading-relaxed">{preview}</div>
+            </div>
+          )}
+
+          <ModalActions onCancel={() => setShowForm(false)} onSave={addManual} saveLabel="บันทึกคาบนี้" />
         </Modal>
       )}
     </div>
