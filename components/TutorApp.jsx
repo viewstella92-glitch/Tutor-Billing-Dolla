@@ -542,6 +542,12 @@ function StudentsTab({ students, updateStudents, sessions }) {
 
       {historyStudent&&(()=>{const student=students.find(s=>s.id===historyStudent);const history=sessions.filter(s=>s.studentId===historyStudent).sort((a,b)=>b.date.localeCompare(a.date));const totalAll=history.reduce((sum,s)=>sum+s.hours*s.rate,0);return <Modal onClose={()=>setHistoryStudent(null)} title={`ประวัติการสอน · ${student?.name||''}`}>{history.length===0?<div style={{color:C.inkSoft}} className="text-sm">ยังไม่มีประวัติการสอน</div>:<><div style={{color:C.inkSoft}} className="text-xs mb-3">รวม {history.length} คาบ ตั้งแต่เริ่มเรียน · {fmtMoney(totalAll)}</div><div className="flex flex-col gap-1 max-h-80 overflow-y-auto">{history.map((s,i)=><div key={s.id} style={{borderBottom:i<history.length-1?`1px dashed ${C.line}`:'none'}} className="py-2 text-sm"><div className="flex items-center justify-between"><span className="font-medium">{fmtDateThai(s.date)} · {fmtHours(s.hours)} ชม.</span><span style={{color:C.gold}}>{fmtMoney(s.hours*s.rate)}</span></div>{s.note&&<div style={{color:C.inkSoft}} className="text-xs mt-0.5">{s.note}</div>}</div>)}</div></> }<div className="flex mt-4"><button onClick={()=>setHistoryStudent(null)} style={{border:`1px solid ${C.line}`,color:C.inkSoft}} className="flex-1 text-sm font-medium py-2 rounded-lg">ปิด</button></div></Modal>})()}
 
+      {typeof historyStudent === 'string' && historyStudent.startsWith('assistant:') && (() => {
+        const student = students.find(s => s.id === historyStudent.slice(10));
+        if (!student) return null;
+        return <TutorAssistant student={student} sessions={sessions} onClose={()=>setHistoryStudent(null)} onPlanner={()=>{setLessonDuration(90);setHistoryStudent('lesson:'+student.id)}} />;
+      })()}
+
       {typeof historyStudent === 'string' && historyStudent.startsWith('lesson:') && (() => {
         const student = students.find(s => s.id === historyStudent.slice(7));
         if (!student) return null;
@@ -571,6 +577,9 @@ function StudentsTab({ students, updateStudents, sessions }) {
             <button onClick={()=>{setLessonDuration(90);setHistoryStudent('lesson:'+student.id)}} style={{background:C.pine,color:C.paper}} className="w-full text-sm font-medium py-2.5 rounded-lg flex items-center justify-center gap-2 mt-2">
               <ClipboardList size={16}/> สร้างแผนสอนคาบถัดไป
             </button>
+            <button onClick={()=>setHistoryStudent('assistant:'+student.id)} style={{border:`1px solid ${C.pine}`,color:C.pine}} className="w-full text-sm font-medium py-2.5 rounded-lg flex items-center justify-center gap-2 mt-2">
+              <Brain size={16}/> AI Tutor Assistant · เตรียมคาบนี้
+            </button>
           </div>
         </Modal>;
       })()}
@@ -578,6 +587,94 @@ function StudentsTab({ students, updateStudents, sessions }) {
   );
 }
 
+
+// ---------- AI Tutor Assistant ----------
+function TutorAssistant({ student, sessions, onClose, onPlanner }) {
+  const history = sessions.filter(x=>x.studentId===student.id).sort((a,b)=>a.date.localeCompare(b.date));
+  const subject = student.subjects?.[0] || 'วิชาหลัก';
+  const weakness = student.weaknesses || 'จุดที่ยังไม่แม่นจากคาบก่อน';
+  const goal = student.goals || 'เพิ่มความเข้าใจและความแม่นยำ';
+  const latest = history[history.length-1];
+  const score = student.latestScore !== '' ? Number(student.latestScore) : null;
+  const target = student.targetScore !== '' ? Number(student.targetScore) : null;
+  const gap = score != null && target != null ? target-score : null;
+
+  const questions = subject.includes('ฟิสิกส์')
+    ? [
+        'ถ้าโจทย์นี้เปลี่ยนค่าตัวแปรหนึ่งตัว คำตอบจะเปลี่ยนอย่างไร?',
+        'โจทย์กำหนดอะไรมาให้ และเราต้องหาอะไร?',
+        'ทำไมจึงเลือกสูตรนี้ และหน่วยของคำตอบควรเป็นอะไร?'
+      ]
+    : subject.includes('คณิตศาสตร์')
+    ? [
+        'โจทย์กำลังถามหาอะไร และข้อมูลไหนจำเป็นจริง ๆ?',
+        'มีวิธีทำอีกแบบไหม หรือวิธีนี้สั้นที่สุดเพราะอะไร?',
+        'ถ้าเปลี่ยนตัวเลขในโจทย์ วิธีคิดยังใช้ได้เหมือนเดิมไหม?'
+      ]
+    : [
+        'ลองอธิบายเรื่องนี้ด้วยภาษาของตัวเองโดยไม่ดูตัวอย่าง',
+        'ส่วนไหนของโจทย์ที่ทำให้ลังเลที่สุด?',
+        'ถ้าเจอโจทย์คล้ายกันอีกครั้ง จะเริ่มจากตรงไหน?'
+      ];
+
+  const moves = [
+    'เริ่มจาก '+weakness+' ด้วยโจทย์สั้น 1 ข้อ เพื่อดูว่าปัญหาอยู่ที่ความเข้าใจหรือขั้นตอนการทำ',
+    student.learningStyle === 'เห็นภาพ'
+      ? 'ใช้ภาพ ตาราง หรือขั้นตอนบนกระดาษก่อนให้ทำโจทย์'
+      : student.learningStyle === 'ทำโจทย์'
+      ? 'ให้ลองทำก่อน แล้วค่อยแก้เฉพาะจุดที่ติด'
+      : 'ให้นักเรียนอธิบายวิธีคิดออกเสียงก่อนเฉลย',
+    gap != null && gap > 0
+      ? 'ยังห่างจากเป้าหมาย '+gap+' คะแนน จึงควรเน้นความแม่นยำก่อนเพิ่มความยาก'
+      : 'เมื่อทำพื้นฐานได้ ให้เพิ่มโจทย์ประยุกต์เพื่อเช็กการนำไปใช้จริง'
+  ];
+
+  const watch = [
+    'อย่ารีบเฉลยในช่วงแรก ให้ดูว่านักเรียนติดที่ '+weakness+' ตรงไหน',
+    latest?.note ? 'คาบล่าสุดมีบันทึกว่า “'+latest.note+'” ควรใช้เป็นจุดตั้งต้นของคำถาม' : 'หลังคาบควรบันทึกว่าผิดเพราะความเข้าใจ สูตร ขั้นตอน หรือความรอบคอบ',
+  ];
+
+  return (
+    <Modal onClose={onClose} title={'AI Tutor Assistant · '+student.name}>
+      <div className="space-y-4">
+        <Card style={{background:C.pineTint,borderColor:C.pine}}>
+          <div style={{color:C.pineDark}} className="text-xs font-medium mb-1">เป้าหมายคาบนี้</div>
+          <div className="text-sm">{goal}</div>
+          <div style={{color:C.inkSoft}} className="text-xs mt-1">
+            {score != null ? 'คะแนนล่าสุด '+score+(target != null ? ' · เป้าหมาย '+target : '') : 'ยังไม่มีคะแนนล่าสุด'}
+          </div>
+        </Card>
+
+        <div>
+          <div className="font-medium text-sm mb-2">คำถามที่ควรถาม</div>
+          <div className="space-y-1.5">
+            {questions.map((q,i)=><div key={i} style={{background:C.paper}} className="text-sm p-2.5 rounded-lg border">{i+1}. {q}</div>)}
+          </div>
+        </div>
+
+        <div>
+          <div className="font-medium text-sm mb-2">วิธีสอนที่ระบบแนะนำ</div>
+          <div className="space-y-1.5">
+            {moves.map((x,i)=><div key={i} className="text-sm flex gap-2"><span style={{color:C.pine}}>•</span><span>{x}</span></div>)}
+          </div>
+        </div>
+
+        <div>
+          <div className="font-medium text-sm mb-2">จุดที่ควรระวัง</div>
+          <div className="space-y-1.5">
+            {watch.map((x,i)=><div key={i} style={{background:C.goldTint}} className="text-sm p-2.5 rounded-lg">{x}</div>)}
+          </div>
+        </div>
+
+        <div style={{color:C.inkSoft}} className="text-xs">สร้างจากโปรไฟล์นักเรียน + ประวัติคาบสอน {history.length} คาบ · ยังไม่เรียก LLM ภายนอก</div>
+
+        <button onClick={onPlanner} style={{background:C.pine,color:C.paper}} className="w-full text-sm font-medium py-2.5 rounded-lg flex items-center justify-center gap-2">
+          <ClipboardList size={16}/> สร้างแผนสอนคาบถัดไป
+        </button>
+      </div>
+    </Modal>
+  );
+}
 
 // ---------- Smart Lesson Planner ----------
 // Lesson plans are generated from the student's profile and teaching history.
