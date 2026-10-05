@@ -330,7 +330,7 @@ function SmartAlerts({ students, sessions, schedule }) {
   });
   schedule.filter(x=>!x.recurring&&x.date).forEach(x=>{
     const days=daysBetween(today.toISOString().slice(0,10),x.date);
-    if(days<0) alerts.push({level:'warn',text:'มีตารางสอนที่ยังไม่ตรวจสอบผล: '+(getStudentName(x.studentId,students)||'นักเรียน')+' · '+fmtDateThai(x.date)});
+    if(days<0) alerts.push({level:'warn',text:'มีตารางสอนที่ยังไม่ตรวจสอบผล: '+((students.find(s=>s.id===x.studentId)||{}).name||'นักเรียน')+' · '+fmtDateThai(x.date)});
   });
   return (
     <Card>
