@@ -151,6 +151,8 @@ export default function App() {
 
   const NAV = [
     { id: 'dashboard', label: 'ภาพรวม', icon: LayoutDashboard },
+    { id: 'progress', label: 'พัฒนาการ', icon: TrendingUp },
+    { id: 'alerts', label: 'แจ้งเตือน', icon: Bell },
     { id: 'students', label: 'นักเรียน', icon: Users },
     { id: 'schedule', label: 'ตารางสอน', icon: CalendarDays },
     { id: 'calendar', label: 'ปฏิทินเรียน', icon: Send },
@@ -220,6 +222,8 @@ export default function App() {
           <Dashboard students={students} sessions={sessions} schedule={schedule} updateSessions={updateSessions} getStudent={getStudent} showToast={showToast} setTab={setTab} />
         )}
         {tab === 'students' && <StudentsTab students={students} updateStudents={updateStudents} sessions={sessions} />}
+        {tab === 'progress' && <ProgressIntelligence students={students} sessions={sessions} />}
+        {tab === 'alerts' && <SmartAlerts students={students} sessions={sessions} schedule={schedule} />}
         {tab === 'schedule' && (
           <ScheduleTab students={students} schedule={schedule} updateSchedule={updateSchedule} sessions={sessions} updateSessions={updateSessions} getStudent={getStudent} showToast={showToast} />
         )}
@@ -269,6 +273,74 @@ function EmptyState({ text }) {
 }
 
 // ---------- Dashboard ----------
+function ProgressIntelligence({ students, sessions }) {
+  const rows = students.map(s => {
+    const history=sessions.filter(x=>x.studentId===s.id).sort((a,b)=>a.date.localeCompare(b.date));
+    const scores=history.map(x=>Number((x.note||'').match(/คะแนน[:： ]*(\\d+(?:\\.\\d+)?)/)?.[1])).filter(Number.isFinite);
+    const current=s.latestScore!=='' ? Number(s.latestScore) : (scores.length?scores[scores.length-1]:null);
+    const baseline=s.baselineScore!=='' ? Number(s.baselineScore) : (scores.length?scores[0]:null);
+    const target=s.targetScore!=='' ? Number(s.targetScore) : null;
+    const change=current!=null&&baseline!=null?current-baseline:null;
+    const gap=current!=null&&target!=null?target-current:null;
+    const trend=change==null?'ยังไม่มีข้อมูล':change>0?'ดีขึ้น':change<0?'ต้องติดตาม':'ทรงตัว';
+    return {...s,historyCount:history.length,current,change,gap,trend};
+  });
+  const needsAttention=rows.filter(x=>x.trend==='ต้องติดตาม'||(x.gap!=null&&x.gap>10));
+  return (
+    <div className="space-y-4">
+      <SectionTitle sub="ดูแนวโน้มคะแนนและนักเรียนที่ควรติดตาม">Progress Intelligence</SectionTitle>
+      {rows.length===0?<EmptyState text="ยังไม่มีข้อมูลนักเรียน"/>:<>
+        <div className="grid grid-cols-2 gap-2">
+          <Card><div className="text-xs" style={{color:C.inkSoft}}>นักเรียนทั้งหมด</div><div className="text-2xl font-semibold mt-1">{rows.length}</div></Card>
+          <Card><div className="text-xs" style={{color:C.inkSoft}}>ควรติดตาม</div><div className="text-2xl font-semibold mt-1">{needsAttention.length}</div></Card>
+        </div>
+        {needsAttention.length>0&&<Card style={{background:C.goldTint}}>
+          <div className="font-medium text-sm mb-2">ควรติดตามเป็นพิเศษ</div>
+          <div className="space-y-2">{needsAttention.map(s=><div key={s.id} className="text-sm"><b>{s.name}</b> · {s.trend}{s.gap!=null?' · ห่างเป้าหมาย '+s.gap+' คะแนน':''}</div>)}</div>
+        </Card>}
+        <div className="space-y-2">{rows.map(s=><Card key={s.id}>
+          <div className="flex justify-between gap-3">
+            <div><div className="font-medium text-sm">{s.name}</div><div className="text-xs mt-1" style={{color:C.inkSoft}}>{s.historyCount} คาบ · {s.current!=null?'คะแนนล่าสุด '+s.current:'ยังไม่มีคะแนน'}</div></div>
+            <div className="text-sm font-medium">{s.trend}</div>
+          </div>
+          <div className="text-xs mt-2" style={{color:C.inkSoft}}>
+            {s.change!=null?'จากจุดเริ่มต้น '+(s.change>=0?'+':'')+s.change+' คะแนน':'ยังไม่มีข้อมูลพอสำหรับวัดแนวโน้ม'}
+            {s.target!=null&&s.current!=null?' · เป้าหมาย '+s.target:''}
+          </div>
+        </Card>)}</div>
+      </>}
+    </div>
+  );
+}
+
+// ---------- Smart Alerts ----------
+function SmartAlerts({ students, sessions, schedule }) {
+  const today=new Date(); today.setHours(0,0,0,0);
+  const alerts=[];
+  students.forEach(s=>{
+    const history=sessions.filter(x=>x.studentId===s.id).sort((a,b)=>b.date.localeCompare(a.date));
+    const last=history[0];
+    if(s.status==='active' && !last) alerts.push({level:'info',text:s.name+' ยังไม่มีบันทึกคาบสอน'});
+    if(last){
+      const days=daysBetween(last.date,today.toISOString().slice(0,10));
+      if(days>=21) alerts.push({level:'warn',text:s.name+' ไม่มีคาบสอน/บันทึกคาบมาแล้ว '+days+' วัน'});
+    }
+    if(s.latestScore!==''&&s.targetScore!==''&&Number(s.targetScore)-Number(s.latestScore)>=10)
+      alerts.push({level:'warn',text:s.name+' ยังห่างเป้าหมาย '+(Number(s.targetScore)-Number(s.latestScore))+' คะแนน'});
+  });
+  schedule.filter(x=>!x.recurring&&x.date).forEach(x=>{
+    const days=daysBetween(today.toISOString().slice(0,10),x.date);
+    if(days<0) alerts.push({level:'warn',text:'มีตารางสอนที่ยังไม่ตรวจสอบผล: '+(getStudentName(x.studentId,students)||'นักเรียน')+' · '+fmtDateThai(x.date)});
+  });
+  return (
+    <Card>
+      <div className="font-medium text-sm mb-2">Smart Alerts</div>
+      {alerts.length===0?<div className="text-sm" style={{color:C.inkSoft}}>ตอนนี้ยังไม่มีรายการที่ต้องติดตาม</div>:
+      <div className="space-y-1.5">{alerts.map((a,i)=><div key={i} className="text-sm">• {a.text}</div>)}</div>}
+    </Card>
+  );
+}
+
 function Dashboard({ students, sessions, schedule, updateSessions, getStudent, showToast, setTab }) {
   if (students.length === 0) {
     return (
