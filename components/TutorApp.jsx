@@ -367,6 +367,9 @@ function Dashboard({ students, sessions, schedule, updateSessions, getStudent, s
     );
   }
 
+  const [prepStudent, setPrepStudent] = useState(null);
+  const [prepDuration, setPrepDuration] = useState(90);
+
   const thisMonth = monthStr(todayStr());
   const sessionsThisMonth = sessions.filter((s) => monthStr(s.date) === thisMonth);
   const revenueThisMonth = sessionsThisMonth.reduce((sum, s) => sum + s.hours * s.rate, 0);
@@ -427,26 +430,44 @@ function Dashboard({ students, sessions, schedule, updateSessions, getStudent, s
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card>
-          <div className="font-medium mb-3">สอนวันนี้</div>
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <div className="font-medium">สอนวันนี้</div>
+              <div className="text-xs mt-0.5" style={{ color: C.inkSoft }}>เปิดดูข้อมูลแล้วเตรียมคาบได้ทันที</div>
+            </div>
+            <span style={{ color: C.pine }} className="text-xs font-medium">{todaysSlots.length} คาบ</span>
+          </div>
           {todaysSlots.length === 0 && <div style={{ color: C.inkSoft }} className="text-sm">ไม่มีคาบสอนวันนี้</div>}
           <div className="flex flex-col gap-2">
             {todaysSlots.map((slot) => {
               const student = getStudent(slot.studentId);
               const logged = sessions.some((s) => s.sourceSlotId === slot.id && s.date === today);
               return (
-                <div key={slot.id} style={{ borderBottom: `1px dashed ${C.line}` }} className="flex items-center justify-between pb-2">
-                  <div>
-                    <div className="text-sm font-medium">{student?.name || 'ไม่ทราบชื่อ'}</div>
-                    <div style={{ color: C.inkSoft }} className="text-xs">{slot.start}–{slot.end}</div>
+                <div key={slot.id} style={{ borderBottom: `1px dashed ${C.line}` }} className="pb-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <div className="text-sm font-medium">{student?.name || 'ไม่ทราบชื่อ'}</div>
+                      <div style={{ color: C.inkSoft }} className="text-xs">{slot.start}–{slot.end}</div>
+                    </div>
+                    <button
+                      onClick={() => student && setPrepStudent(student)}
+                      disabled={!student}
+                      style={{ border: `1px solid ${C.line}`, color: C.pineDark }}
+                      className="text-xs font-medium px-2.5 py-1.5 rounded-lg disabled:opacity-40"
+                    >
+                      เตรียมคาบนี้
+                    </button>
                   </div>
-                  <button
-                    onClick={() => markTaught(slot)}
-                    disabled={logged}
-                    style={logged ? { color: C.pine } : { background: C.pineTint, color: C.pineDark }}
-                    className="text-xs font-medium px-3 py-1.5 rounded-lg flex items-center gap-1"
-                  >
-                    {logged ? (<><CheckCircle2 size={14} /> บันทึกแล้ว</>) : 'สอนแล้ว ✓'}
-                  </button>
+                  <div className="flex justify-end mt-1.5">
+                    <button
+                      onClick={() => markTaught(slot)}
+                      disabled={logged}
+                      style={logged ? { color: C.pine } : { background: C.pineTint, color: C.pineDark }}
+                      className="text-xs font-medium px-3 py-1.5 rounded-lg flex items-center gap-1"
+                    >
+                      {logged ? (<><CheckCircle2 size={14} /> บันทึกแล้ว</>) : 'สอนแล้ว ✓'}
+                    </button>
+                  </div>
                 </div>
               );
             })}
@@ -490,6 +511,16 @@ function Dashboard({ students, sessions, schedule, updateSessions, getStudent, s
       )}
 
       <YearSummary sessions={sessions} />
+
+      {prepStudent && (
+        <LessonPlanner
+          student={prepStudent}
+          sessions={sessions}
+          duration={prepDuration}
+          setDuration={setPrepDuration}
+          onClose={() => setPrepStudent(null)}
+        />
+      )}
     </div>
   );
 }
