@@ -450,6 +450,7 @@ function StudentsTab({ students, updateStudents, sessions }) {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [historyStudent, setHistoryStudent] = useState(null);
+  const [lessonDuration, setLessonDuration] = useState(90);
 
   const openNew = () => { setForm({ ...emptyForm }); setEditing('new'); };
   const openEdit = (s) => { setForm({ ...emptyForm, ...s, subjects:Array.isArray(s.subjects)?s.subjects:[], baselineScore:s.baselineScore??'', latestScore:s.latestScore??'', targetScore:s.targetScore??'' }); setEditing(s.id); };
@@ -541,6 +542,12 @@ function StudentsTab({ students, updateStudents, sessions }) {
 
       {historyStudent&&(()=>{const student=students.find(s=>s.id===historyStudent);const history=sessions.filter(s=>s.studentId===historyStudent).sort((a,b)=>b.date.localeCompare(a.date));const totalAll=history.reduce((sum,s)=>sum+s.hours*s.rate,0);return <Modal onClose={()=>setHistoryStudent(null)} title={`ประวัติการสอน · ${student?.name||''}`}>{history.length===0?<div style={{color:C.inkSoft}} className="text-sm">ยังไม่มีประวัติการสอน</div>:<><div style={{color:C.inkSoft}} className="text-xs mb-3">รวม {history.length} คาบ ตั้งแต่เริ่มเรียน · {fmtMoney(totalAll)}</div><div className="flex flex-col gap-1 max-h-80 overflow-y-auto">{history.map((s,i)=><div key={s.id} style={{borderBottom:i<history.length-1?`1px dashed ${C.line}`:'none'}} className="py-2 text-sm"><div className="flex items-center justify-between"><span className="font-medium">{fmtDateThai(s.date)} · {fmtHours(s.hours)} ชม.</span><span style={{color:C.gold}}>{fmtMoney(s.hours*s.rate)}</span></div>{s.note&&<div style={{color:C.inkSoft}} className="text-xs mt-0.5">{s.note}</div>}</div>)}</div></> }<div className="flex mt-4"><button onClick={()=>setHistoryStudent(null)} style={{border:`1px solid ${C.line}`,color:C.inkSoft}} className="flex-1 text-sm font-medium py-2 rounded-lg">ปิด</button></div></Modal>})()}
 
+      {typeof historyStudent === 'string' && historyStudent.startsWith('lesson:') && (() => {
+        const student = students.find(s => s.id === historyStudent.slice(7));
+        if (!student) return null;
+        return <LessonPlanner student={student} sessions={sessions} duration={lessonDuration} setDuration={setLessonDuration} onClose={()=>setHistoryStudent(null)} />;
+      })()}
+
       {typeof historyStudent === 'string' && historyStudent.startsWith('analysis:') && (() => {
         const student = students.find(s => s.id === historyStudent.slice(9));
         if (!student) return null;
@@ -561,10 +568,106 @@ function StudentsTab({ students, updateStudents, sessions }) {
               <div className="space-y-1.5">{a.recommendations.map((x,i)=><div key={i} style={{background:C.paper}} className="text-sm p-2.5 rounded-lg border" >{i+1}. {x}</div>)}</div>
             </div>
             <div style={{color:C.inkSoft}} className="text-xs">อิงจากข้อมูลโปรไฟล์ + ประวัติการเรียน {a.historyCount} คาบในระบบ</div>
+            <button onClick={()=>{setLessonDuration(90);setHistoryStudent('lesson:'+student.id)}} style={{background:C.pine,color:C.paper}} className="w-full text-sm font-medium py-2.5 rounded-lg flex items-center justify-center gap-2 mt-2">
+              <ClipboardList size={16}/> สร้างแผนสอนคาบถัดไป
+            </button>
           </div>
         </Modal>;
       })()}
     </div>
+  );
+}
+
+
+// ---------- Smart Lesson Planner ----------
+function LessonPlanner({ student, sessions, duration, setDuration, onClose }) {
+  const history = sessions.filter(x=>x.studentId===student.id).sort((a,b)=>b.date.localeCompare(a.date));
+  const subject = student.subjects?.[0] || 'วิชาหลัก';
+  const weakness = student.weaknesses || 'ทบทวนจุดที่ยังไม่แม่นจากคาบก่อน';
+  const goal = student.goals || 'เพิ่มความเข้าใจและความแม่นยำ';
+  const style = student.learningStyle || '';
+  const latestNote = history.find(x=>x.note)?.note || '';
+  const score = student.latestScore !== '' ? Number(student.latestScore) : null;
+  const target = student.targetScore !== '' ? Number(student.targetScore) : null;
+  const gap = score != null && target != null ? target-score : null;
+
+  const buildPlan = () => {
+    const warm = Math.round(duration * 0.12);
+    const concept = Math.round(duration * 0.23);
+    const guided = Math.round(duration * 0.30);
+    const independent = Math.round(duration * 0.23);
+    const exit = Math.max(5, duration - warm-concept-guided-independent);
+    const practice = subject.includes('ฟิสิกส์')
+      ? 'โจทย์คำนวณ 2–3 ข้อ โดยให้เขียนสิ่งที่โจทย์กำหนด → สูตร → แทนค่า → ตรวจหน่วย'
+      : subject.includes('คณิตศาสตร์')
+      ? 'ทำโจทย์จากง่ายไปกลาง แล้วเพิ่มโจทย์ประยุกต์ 1 ข้อเพื่อดูการถ่ายโอนความเข้าใจ'
+      : 'ทำแบบฝึกหัดสั้นจากง่ายไปกลาง แล้วให้สรุปคำตอบด้วยภาษาของตัวเอง';
+    return [
+      {time:warm,title:'Warm-up · เช็กความพร้อม',detail:warm+' นาที · คำถามสั้น 3–5 ข้อเรื่อง '+weakness},
+      {time:concept,title:'Concept · ปู/ทบทวนแนวคิด',detail:concept+' นาที · ทบทวนเฉพาะส่วนที่เกี่ยวกับ '+weakness+' และเชื่อมกับเป้าหมาย '+goal},
+      {time:guided,title:'Guided Practice · ทำโจทย์ร่วมกัน',detail:guided+' นาที · '+practice},
+      {time:independent,title:'Independent Practice · ให้ลองเอง',detail:independent+' นาที · ให้นักเรียนทำโจทย์โดยลดคำใบ้ลง และจดข้อที่ติดขัด'},
+      {time:exit,title:'Exit Ticket · วัดผลท้ายคาบ',detail:exit+' นาที · โจทย์ใหม่ 2 ข้อ + ให้นักเรียนอธิบายว่าทำไมจึงเลือกวิธีนี้'},
+    ];
+  };
+
+  const plan=buildPlan();
+
+  return (
+    <Modal onClose={onClose} title={'แผนสอน · '+student.name}>
+      <div className="space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-sm font-medium">{subject}</div>
+            <div style={{color:C.inkSoft}} className="text-xs mt-0.5">
+              {score != null ? 'คะแนนล่าสุด '+score+(target != null ? ' · เป้าหมาย '+target : '') : 'ยังไม่มีคะแนนล่าสุด'}
+            </div>
+          </div>
+          <select value={duration} onChange={e=>setDuration(Number(e.target.value))} style={inputStyle} className="text-sm px-2.5 py-2 rounded-lg">
+            <option value="60">60 นาที</option>
+            <option value="90">90 นาที</option>
+            <option value="120">120 นาที</option>
+          </select>
+        </div>
+
+        <Card style={{background:C.goldTint,borderColor:C.gold}}>
+          <div className="text-xs font-medium" style={{color:C.gold}}>โฟกัสของคาบนี้</div>
+          <div className="text-sm mt-1">เน้น: {weakness}</div>
+          <div style={{color:C.inkSoft}} className="text-xs mt-1">เป้าหมาย: {goal}</div>
+          {gap != null && gap > 0 && <div style={{color:C.brick}} className="text-xs mt-1">ยังห่างจากเป้าคะแนน {gap} คะแนน</div>}
+          {style && <div style={{color:C.inkSoft}} className="text-xs mt-1">วิธีเรียนที่ควรใช้: {style}</div>}
+        </Card>
+
+        <div>
+          <div className="font-medium text-sm mb-2">ลำดับการสอน</div>
+          <div className="space-y-2">
+            {plan.map((p,i)=>(
+              <div key={i} style={{border:'1px solid '+C.line,background:C.surface}} className="rounded-lg p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-sm font-medium">{i+1}. {p.title}</div>
+                  <span style={{color:C.pine}} className="text-xs font-medium whitespace-nowrap">{p.time} นาที</span>
+                </div>
+                <div style={{color:C.inkSoft}} className="text-xs mt-1.5 leading-relaxed">{p.detail}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <Card>
+          <div className="font-medium text-sm mb-2">สิ่งที่ควรบันทึกหลังคาบ</div>
+          <div className="space-y-1.5 text-xs" style={{color:C.inkSoft}}>
+            <div>• คะแนน/จำนวนข้อที่ทำถูก</div>
+            <div>• จุดผิดที่เกิดซ้ำ</div>
+            <div>• เรื่องที่นักเรียนอธิบายได้ด้วยตัวเอง</div>
+            {latestNote && <div>• โน้ตล่าสุด: {latestNote}</div>}
+          </div>
+        </Card>
+
+        <div style={{color:C.inkSoft}} className="text-xs">
+          แผนนี้สร้างจากข้อมูลโปรไฟล์ + ประวัติคาบสอน และจะปรับตามคะแนน/จุดอ่อนของนักเรียน
+        </div>
+      </div>
+    </Modal>
   );
 }
 
