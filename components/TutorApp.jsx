@@ -153,6 +153,7 @@ export default function App() {
     { id: 'dashboard', label: 'ภาพรวม', icon: LayoutDashboard },
     { id: 'progress', label: 'พัฒนาการ', icon: TrendingUp },
     { id: 'alerts', label: 'แจ้งเตือน', icon: Bell },
+    { id: 'business', label: 'ธุรกิจ', icon: BarChart },
     { id: 'students', label: 'นักเรียน', icon: Users },
     { id: 'schedule', label: 'ตารางสอน', icon: CalendarDays },
     { id: 'calendar', label: 'ปฏิทินเรียน', icon: Send },
@@ -224,6 +225,7 @@ export default function App() {
         {tab === 'students' && <StudentsTab students={students} updateStudents={updateStudents} sessions={sessions} />}
         {tab === 'progress' && <ProgressIntelligence students={students} sessions={sessions} />}
         {tab === 'alerts' && <SmartAlerts students={students} sessions={sessions} schedule={schedule} />}
+        {tab === 'business' && <BusinessIntelligence students={students} sessions={sessions} schedule={schedule} />}
         {tab === 'schedule' && (
           <ScheduleTab students={students} schedule={schedule} updateSchedule={updateSchedule} sessions={sessions} updateSessions={updateSessions} getStudent={getStudent} showToast={showToast} />
         )}
@@ -1563,6 +1565,51 @@ function InvoiceTab({ students, sessions, updateSessions, showToast }) {
           )}
         </>
       )}
+    </div>
+  );
+}
+
+// ---------- Business Intelligence ----------
+function BusinessIntelligence({ students, sessions, schedule }) {
+  const currentMonth = todayStr().slice(0, 7);
+  const [month, setMonth] = useState(currentMonth);
+  const monthSessions = sessions.filter(s => monthStr(s.date) === month);
+  const totalRevenue = monthSessions.reduce((sum, s) => sum + Number(s.hours) * Number(s.rate), 0);
+  const paid = monthSessions.filter(s => s.paid).reduce((sum, s) => sum + Number(s.hours) * Number(s.rate), 0);
+  const unpaid = totalRevenue - paid;
+  const invoiced = monthSessions.filter(s => s.invoiced).reduce((sum, s) => sum + Number(s.hours) * Number(s.rate), 0);
+  const hours = monthSessions.reduce((sum, s) => sum + Number(s.hours), 0);
+  const active = students.filter(s => s.status === 'active').length;
+  const avgRate = hours ? totalRevenue / hours : 0;
+  const byStudent = students.map(s => {
+    const rows = monthSessions.filter(x => x.studentId === s.id);
+    const h = rows.reduce((sum, x) => sum + Number(x.hours), 0);
+    const amount = rows.reduce((sum, x) => sum + Number(x.hours) * Number(x.rate), 0);
+    return { ...s, count: rows.length, hours: h, amount };
+  }).filter(s => s.count > 0).sort((a,b) => b.amount - a.amount);
+  const lastSix = Array.from({ length: 6 }, (_, i) => {
+    const d = new Date(month + '-01T00:00:00');
+    d.setMonth(d.getMonth() - (5 - i));
+    const key = d.toISOString().slice(0, 7);
+    const rows = sessions.filter(s => monthStr(s.date) === key);
+    return { key, label: MONTHS_TH[d.getMonth()], amount: rows.reduce((sum,s)=>sum+Number(s.hours)*Number(s.rate),0) };
+  });
+  const maxAmount = Math.max(1, ...lastSix.map(x => x.amount));
+  const upcoming = schedule.filter(s => s.recurring || (s.date && s.date >= todayStr())).length;
+  return (
+    <div className="space-y-4">
+      <div className="flex items-start justify-between gap-3"><SectionTitle sub="ดูรายได้ ชั่วโมงสอน และภาพรวมธุรกิจติวเตอร์">Business Intelligence</SectionTitle><input type="month" value={month} onChange={e=>setMonth(e.target.value)} style={inputStyle} className="text-sm px-2.5 py-2 rounded-lg" /></div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+        <Card><div className="text-xs" style={{color:C.inkSoft}}>รายได้เดือนนี้</div><div className="text-xl font-semibold mt-1">{fmtMoney(totalRevenue)}</div></Card>
+        <Card><div className="text-xs" style={{color:C.inkSoft}}>ชั่วโมงสอน</div><div className="text-xl font-semibold mt-1">{fmtHours(hours)} ชม.</div></Card>
+        <Card><div className="text-xs" style={{color:C.inkSoft}}>ยังไม่ได้รับ</div><div className="text-xl font-semibold mt-1" style={{color:unpaid>0?C.brick:C.pine}}>{fmtMoney(unpaid)}</div></Card>
+        <Card><div className="text-xs" style={{color:C.inkSoft}}>นักเรียน Active</div><div className="text-xl font-semibold mt-1">{active}</div></Card>
+      </div>
+      <Card><div className="flex justify-between gap-3 mb-3"><div className="font-medium text-sm">รายได้ย้อนหลัง 6 เดือน</div><div className="text-xs" style={{color:C.inkSoft}}>เฉลี่ย {fmtMoney(avgRate)}/ชม.</div></div><div className="flex items-end gap-2 h-36">{lastSix.map(x=><div key={x.key} className="flex-1 h-full flex flex-col justify-end items-center gap-1"><div className="text-[10px]" style={{color:C.inkSoft}}>{x.amount ? Math.round(x.amount).toLocaleString('th-TH') : ''}</div><div title={fmtMoney(x.amount)} style={{height:Math.max(4,x.amount/maxAmount*95)+'px',background:C.pine}} className="w-full max-w-10 rounded-t-md"/><div className="text-[10px]" style={{color:C.inkSoft}}>{x.label}</div></div>)}</div></Card>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card><div className="font-medium text-sm mb-3">รายได้แยกตามนักเรียน</div>{byStudent.length===0?<EmptyState text="เดือนนี้ยังไม่มีคาบสอน"/>:<div className="space-y-2">{byStudent.map(s=><div key={s.id} className="flex justify-between gap-3 text-sm"><div><div className="font-medium">{s.name}</div><div className="text-xs" style={{color:C.inkSoft}}>{s.count} คาบ · {fmtHours(s.hours)} ชม.</div></div><div style={{color:C.gold}} className="font-medium">{fmtMoney(s.amount)}</div></div>)}</div>}</Card>
+        <Card><div className="font-medium text-sm mb-3">สถานะการเก็บเงิน</div><div className="space-y-2 text-sm"><div className="flex justify-between"><span style={{color:C.inkSoft}}>แจ้งค่าสอนแล้ว</span><b>{fmtMoney(invoiced)}</b></div><div className="flex justify-between"><span style={{color:C.inkSoft}}>รับเงินแล้ว</span><b style={{color:C.pine}}>{fmtMoney(paid)}</b></div><div className="flex justify-between"><span style={{color:C.inkSoft}}>ค้างรับ</span><b style={{color:C.brick}}>{fmtMoney(unpaid)}</b></div></div><div style={{borderTop:'1px solid '+C.line}} className="mt-3 pt-3 text-xs">มีคาบในตาราง/กำหนดการ {upcoming} รายการ</div></Card>
+      </div>
     </div>
   );
 }
