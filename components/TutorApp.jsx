@@ -597,7 +597,7 @@ function StudentsTab({ students, updateStudents, sessions }) {
                 {(s.latestScore!==''||progress!==null)&&<div className="flex gap-3 mt-2 text-xs">{s.latestScore!==''&&<span>ล่าสุด <b>{s.latestScore}</b></span>}{progress!==null&&<span style={{color:progress>=0?C.pine:C.brick}}>{progress>=0?'↑':'↓'} {Math.abs(progress)} คะแนนจากจุดเริ่มต้น</span>}</div>}
                 {history.length>0&&<div style={{color:C.inkSoft}} className="text-xs mt-1">เรียนแล้ว {history.length} คาบ</div>}
               </div>
-              <div className="flex gap-1 shrink-0"><button onClick={()=>setHistoryStudent(s.id)} style={{color:C.inkSoft}} className="p-2 rounded-lg"><ClipboardList size={16}/></button><button onClick={()=>setHistoryStudent(`analysis:${s.id}`)} style={{color:C.pine}} className="p-2 rounded-lg" title="วิเคราะห์นักเรียน"><Brain size={16}/></button><button onClick={()=>openEdit(s)} style={{color:C.inkSoft}} className="p-2 rounded-lg"><Pencil size={16}/></button><button onClick={()=>remove(s.id)} style={{color:C.brick}} className="p-2 rounded-lg"><Trash2 size={16}/></button></div>
+              <div className="flex gap-1 shrink-0"><button onClick={()=>setHistoryStudent(s.id)} style={{color:C.inkSoft}} className="p-2 rounded-lg"><ClipboardList size={16}/></button><button onClick={()=>setHistoryStudent(`analysis:${s.id}`)} style={{color:C.pine}} className="p-2 rounded-lg" title="วิเคราะห์นักเรียน"><Brain size={16}/></button><button onClick={()=>setHistoryStudent(`parent:${s.id}`)} style={{color:C.gold}} className="p-2 rounded-lg" title="สร้างรายงานผู้ปกครอง"><Send size={16}/></button><button onClick={()=>openEdit(s)} style={{color:C.inkSoft}} className="p-2 rounded-lg"><Pencil size={16}/></button><button onClick={()=>remove(s.id)} style={{color:C.brick}} className="p-2 rounded-lg"><Trash2 size={16}/></button></div>
             </div>
           </Card>;
         })}
@@ -629,6 +629,12 @@ function StudentsTab({ students, updateStudents, sessions }) {
       </Modal>}
 
       {historyStudent&&(()=>{const student=students.find(s=>s.id===historyStudent);const history=sessions.filter(s=>s.studentId===historyStudent).sort((a,b)=>b.date.localeCompare(a.date));const totalAll=history.reduce((sum,s)=>sum+s.hours*s.rate,0);return <Modal onClose={()=>setHistoryStudent(null)} title={`ประวัติการสอน · ${student?.name||''}`}>{history.length===0?<div style={{color:C.inkSoft}} className="text-sm">ยังไม่มีประวัติการสอน</div>:<><div style={{color:C.inkSoft}} className="text-xs mb-3">รวม {history.length} คาบ ตั้งแต่เริ่มเรียน · {fmtMoney(totalAll)}</div><div className="flex flex-col gap-1 max-h-80 overflow-y-auto">{history.map((s,i)=><div key={s.id} style={{borderBottom:i<history.length-1?`1px dashed ${C.line}`:'none'}} className="py-2 text-sm"><div className="flex items-center justify-between"><span className="font-medium">{fmtDateThai(s.date)} · {fmtHours(s.hours)} ชม.</span><span style={{color:C.gold}}>{fmtMoney(s.hours*s.rate)}</span></div>{s.note&&<div style={{color:C.inkSoft}} className="text-xs mt-0.5">{s.note}</div>}</div>)}</div></> }<div className="flex mt-4"><button onClick={()=>setHistoryStudent(null)} style={{border:`1px solid ${C.line}`,color:C.inkSoft}} className="flex-1 text-sm font-medium py-2 rounded-lg">ปิด</button></div></Modal>})()}
+
+      {typeof historyStudent === 'string' && historyStudent.startsWith('parent:') && (() => {
+        const student = students.find(s => s.id === historyStudent.slice(7));
+        if (!student) return null;
+        return <ParentReport student={student} sessions={sessions} onClose={()=>setHistoryStudent(null)} />;
+      })()}
 
       {typeof historyStudent === 'string' && historyStudent.startsWith('worksheet:') && (() => {
         const student = students.find(s => s.id === historyStudent.slice(10));
@@ -674,6 +680,9 @@ function StudentsTab({ students, updateStudents, sessions }) {
             <button onClick={()=>setHistoryStudent('assistant:'+student.id)} style={{border:`1px solid ${C.pine}`,color:C.pine}} className="w-full text-sm font-medium py-2.5 rounded-lg flex items-center justify-center gap-2 mt-2">
               <Brain size={16}/> AI Tutor Assistant · เตรียมคาบนี้
             </button>
+            <button onClick={()=>setHistoryStudent('parent:'+student.id)} style={{border:`1px solid ${C.gold}`,color:C.gold}} className="w-full text-sm font-medium py-2.5 rounded-lg flex items-center justify-center gap-2 mt-2">
+              <Send size={16}/> สร้างรายงานผู้ปกครอง
+            </button>
           </div>
         </Modal>;
       })()}
@@ -681,6 +690,87 @@ function StudentsTab({ students, updateStudents, sessions }) {
   );
 }
 
+
+// ---------- Parent Report ----------
+function ParentReport({ student, sessions, onClose }) {
+  const history = sessions.filter(x => x.studentId === student.id).sort((a,b) => a.date.localeCompare(b.date));
+  const scores = history.map(x => {
+    const m = (x.note || '').match(/คะแนน[:： ]*(\\d+(?:\\.\\d+)?)/);
+    return m ? Number(m[1]) : null;
+  }).filter(Number.isFinite);
+  const current = student.latestScore !== '' && student.latestScore != null ? Number(student.latestScore) : (scores.length ? scores[scores.length - 1] : null);
+  const baseline = student.baselineScore !== '' && student.baselineScore != null ? Number(student.baselineScore) : (scores.length ? scores[0] : null);
+  const target = student.targetScore !== '' && student.targetScore != null ? Number(student.targetScore) : null;
+  const change = current != null && baseline != null ? current - baseline : null;
+  const recent = history.slice(-3).reverse();
+
+  const observations = [];
+  if (change != null) observations.push(change > 0 ? `คะแนนล่าสุดเพิ่มขึ้น ${change} คะแนนจากจุดเริ่มต้น` : change < 0 ? `คะแนนล่าสุดลดลง ${Math.abs(change)} คะแนนจากจุดเริ่มต้น จึงจะเน้นหาจุดที่ยังผิดพลาด` : 'คะแนนล่าสุดยังใกล้เคียงกับจุดเริ่มต้น');
+  if (student.strengths) observations.push(`จุดแข็ง: ${student.strengths}`);
+  if (student.weaknesses) observations.push(`เรื่องที่กำลังเน้น: ${student.weaknesses}`);
+  if (!observations.length) observations.push('อยู่ระหว่างเก็บข้อมูลพัฒนาการเพิ่มเติม');
+
+  const nextSteps = [];
+  if (student.weaknesses) nextSteps.push(`ทบทวนและฝึกเรื่อง ${student.weaknesses}`);
+  if (target != null && current != null && current < target) nextSteps.push(`ค่อย ๆ เพิ่มระดับโจทย์เพื่อขยับคะแนนไปสู่เป้าหมาย ${target} คะแนน`);
+  if (student.goals) nextSteps.push(`ติดตามเป้าหมาย: ${student.goals}`);
+  if (!nextSteps.length) nextSteps.push('ติดตามผลจากแบบฝึกหัดและคะแนนในคาบถัดไป');
+
+  const message = [
+    `📚 สรุปการเรียนของ ${student.name}`,
+    student.grade ? `ระดับชั้น: ${student.grade}` : '',
+    student.subjects?.length ? `วิชา: ${student.subjects.join(' · ')}` : '',
+    '',
+    'พัฒนาการ',
+    `• เรียนแล้ว ${history.length} คาบ`,
+    current != null ? `• คะแนนล่าสุด: ${current}${target != null ? ` / เป้าหมาย ${target}` : ''}` : '',
+    change != null ? `• เปลี่ยนแปลงจากจุดเริ่มต้น: ${change > 0 ? '+' : ''}${change} คะแนน` : '',
+    '',
+    'สิ่งที่สังเกตได้',
+    ...observations.map(x => `• ${x}`),
+    '',
+    'แนวทางคาบถัดไป',
+    ...nextSteps.map(x => `• ${x}`),
+    '',
+    'จะติดตามพัฒนาการต่อเนื่องในคาบถัดไปค่ะ'
+  ].filter(Boolean).join('\\n');
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(message);
+      onClose();
+      setTimeout(() => alert('คัดลอกรายงานแล้ว'), 50);
+    } catch {
+      alert('คัดลอกไม่สำเร็จ ลองเลือกข้อความจากรายงานเอง');
+    }
+  };
+
+  return (
+    <Modal onClose={onClose} title={`รายงานผู้ปกครอง · ${student.name}`}>
+      <div className="space-y-3">
+        <Card style={{background:C.pineTint,borderColor:C.pine}}>
+          <div style={{color:C.pineDark}} className="text-xs font-medium mb-1">สรุปการเรียน</div>
+          <div className="text-sm">{student.subjects?.length ? student.subjects.join(' · ') : 'วิชาหลัก'} · {history.length} คาบ</div>
+          {current != null && <div className="text-sm mt-1">คะแนนล่าสุด <b>{current}</b>{target != null ? ` / เป้าหมาย ${target}` : ''}</div>}
+          {change != null && <div style={{color:change >= 0 ? C.pine : C.brick}} className="text-xs mt-1">{change >= 0 ? '↑' : '↓'} {Math.abs(change)} คะแนนจากจุดเริ่มต้น</div>}
+        </Card>
+        <div>
+          <div className="font-medium text-sm mb-2">ข้อความพร้อมส่ง</div>
+          <textarea readOnly value={message} style={inputStyle} className="w-full text-sm leading-relaxed px-3 py-2 rounded-lg min-h-64" />
+        </div>
+        {recent.length > 0 && <Card>
+          <div className="font-medium text-sm mb-2">ข้อมูลคาบล่าสุด</div>
+          <div className="space-y-2">{recent.map(x => <div key={x.id} className="text-xs"><div className="font-medium">{fmtDateThai(x.date)} · {fmtHours(x.hours)} ชม.</div>{x.note && <div style={{color:C.inkSoft}} className="mt-0.5">{x.note}</div>}</div>)}</div>
+        </Card>}
+        <div className="flex gap-2">
+          <button onClick={onClose} style={{border:`1px solid ${C.line}`,color:C.inkSoft}} className="flex-1 text-sm font-medium py-2.5 rounded-lg">ปิด</button>
+          <button onClick={copy} style={{background:C.pine,color:C.paper}} className="flex-1 text-sm font-medium py-2.5 rounded-lg flex items-center justify-center gap-2"><Copy size={15}/> คัดลอกข้อความ</button>
+        </div>
+        <div style={{color:C.inkSoft}} className="text-xs">รายงานนี้สร้างจากข้อมูลโปรไฟล์และประวัติการสอนที่บันทึกไว้ในระบบ</div>
+      </div>
+    </Modal>
+  );
+}
 
 // ---------- Smart Worksheet Generator ----------
 function WorksheetGenerator({ student, sessions, onClose }) {
