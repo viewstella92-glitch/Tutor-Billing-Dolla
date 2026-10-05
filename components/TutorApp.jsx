@@ -38,8 +38,256 @@ function fmtDateThai(dateStr) {
   const d = new Date(dateStr + 'T00:00:00');
   return `${d.getDate()} ${MONTHS_TH[d.getMonth()]} ${d.getFullYear() + 543}`;
 }
-function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
-function daysBetween(dateStr, todayIso) { return Math.floor((new Date(todayIso) - new Date(dateStr)) / 86400000); }
+function uid() {
+  return typeof crypto !== 'undefined' && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+}
+
+function daysBetween(dateStr, todayIso) {
+  return Math.floor((new Date(todayIso) - new Date(dateStr)) / 86400000);
+}
+
+function mapStudentRow(row) {
+  return { id: row.id, name: row.name, rate: Number(row.rate) };
+}
+
+function mapScheduleRow(row) {
+  return {
+    id: row.id,
+    studentId: row.student_id,
+    recurring: row.recurring,
+    day: row.day ?? undefined,
+    date: row.date ?? undefined,
+    start: String(row.start_time).slice(0, 5),
+    end: String(row.end_time).slice(0, 5),
+  };
+}
+
+function mapSessionRow(row) {
+  return {
+    id: row.id,
+    studentId: row.student_id,
+    studentName: row.student_name || '',
+    date: row.session_date,
+    hours: Number(row.hours),
+    rate: Number(row.rate),
+    note: row.note || '',
+    invoiced: Boolean(row.invoiced),
+    paid: Boolean(row.paid),
+    sourceSlotId: row.source_slot_id || undefined,
+  };
+}
+
+function localData() {
+  try {
+    return {
+      students: JSON.parse(window.localStorage.getItem('tutor-app:students') || '[]'),
+      schedule: JSON.parse(window.localStorage.getItem('tutor-app:schedule') || '[]'),
+      sessions: JSON.parse(window.localStorage.getItem('tutor-app:sessions') || '[]'),
+    };
+  } catch {
+    return { students: [], schedule: [], sessions: [] };
+  }
+}
+
+function normalizeLegacyData(data) {
+  const studentMap = new Map();
+  const slotMap = new Map();
+
+  const students = data.students.map((s) => {
+    const id = uid();
+    studentMap.set(s.id, id);
+    return { id, name: s.name, rate: Number(s.rate) };
+  });
+
+  const schedule = data.schedule.map((s) => {
+    const id = uid();
+    slotMap.set(s.id, id);
+    return {
+      id,
+      studentId: studentMap.get(s.studentId) || s.studentId,
+      recurring: Boolean(s.recurring),
+      day: s.recurring ? Number(s.day) : undefined,
+      date: s.recurring ? undefined : s.date,
+      start: s.start,
+      end: s.end,
+    };
+  });
+
+  const sessions = data.sessions.map((s) => ({
+    id: uid(),
+    studentId: studentMap.get(s.studentId) || null,
+    studentName: s.studentName || '',
+    date: s.date,
+    hours: Number(s.hours),
+    rate: Number(s.rate),
+    note: s.note || '',
+    invoiced: Boolean(s.invoiced),
+    paid: Boolean(s.paid),
+    sourceSlotId: s.sourceSlotId ? (slotMap.get(s.sourceSlotId) || null) : null,
+  }));
+
+  return { students, schedule, sessions };
+}
+
+async function loadTutorData(userId) {
+  const [studentsRes, scheduleRes, sessionsRes] = await Promise.all([
+    supabase.from('tutor_students').select('*').eq('user_id', userId).order('created_at'),
+    supabase.from('tutor_schedule').select('*').eq('user_id', userId),
+    supabase.from('tutor_sessions').select('*').eq('user_id', userId).order('session_date', { ascending: false }),
+  ]);
+
+  if (studentsRes.error) throw studentsRes.error;
+  if (scheduleRes.error) throw scheduleRes.error;
+  if (sessionsRes.error) throw sessionsRes.error;
+
+  const dbEmpty = studentsRes.data.length === 0 && scheduleRes.data.length === 0 && sessionsRes.data.length === 0;
+  const legacy = localData();
+
+  if (dbEmpty && (legacy.students.length || legacy.schedule.length || legacy.sessions.length)) {
+    const imported = normalizeLegacyData(legacy);
+    await replaceTutorData(userId, imported);
+    try {
+      window.localStorage.removeItem('tutor-app:students');
+      window.localStorage.removeItem('tutor-app:schedule');
+      window.localStorage.removeItem('tutor-app:sessions');
+    } catch {}
+    return imported;
+  }
+
+  return {
+    students: studentsRes.data.map(mapStudentRow),
+    schedule: scheduleRes.data.map(mapScheduleRow),
+    sessions: sessionsRes.data.map(mapSessionRow),
+  };
+}
+
+async function replaceTutorData(userId, data) {
+  const studentRows = data.students.map((s) => ({
+    id: s.id, user_id: userId, name: s.name, rate: Number(s.rate),
+  }));
+  const scheduleRows = data.schedule.map((s) => ({
+    id: s.id,
+    user_id: userId,
+    student_id: s.studentId,
+    recurring: Boolean(s.recurring),
+    day: s.recurring ? Number(s.day) : null,
+    date: s.recurring ? null : s.date,
+    start_time: s.start,
+    end_time: s.end,
+  }));
+  const sessionRows = data.sessions.map((s) => ({
+    id: s.id,
+    user_id: userId,
+    student_id: s.studentId || null,
+    student_name: s.studentName || '',
+    session_date: s.date,
+    hours: Number(s.hours),
+    rate: Number(s.rate),
+    note: s.note || '',
+    invoiced: Boolean(s.invoiced),
+    paid: Boolean(s.paid),
+    source_slot_id: s.sourceSlotId || null,
+  }));
+
+  const { data: existingStudents, error: esErr } = await supabase.from('tutor_students').select('id').eq('user_id', userId);
+  if (esErr) throw esErr;
+  const keepStudentIds = new Set(studentRows.map((r) => r.id));
+  for (const row of existingStudents || []) {
+    if (!keepStudentIds.has(row.id)) {
+      const { error } = await supabase.from('tutor_students').delete().eq('user_id', userId).eq('id', row.id);
+      if (error) throw error;
+    }
+  }
+  if (studentRows.length) {
+    const { error } = await supabase.from('tutor_students').upsert(studentRows);
+    if (error) throw error;
+  }
+
+  const { data: existingSchedule, error: egErr } = await supabase.from('tutor_schedule').select('id').eq('user_id', userId);
+  if (egErr) throw egErr;
+  const keepScheduleIds = new Set(scheduleRows.map((r) => r.id));
+  for (const row of existingSchedule || []) {
+    if (!keepScheduleIds.has(row.id)) {
+      const { error } = await supabase.from('tutor_schedule').delete().eq('user_id', userId).eq('id', row.id);
+      if (error) throw error;
+    }
+  }
+  if (scheduleRows.length) {
+    const { error } = await supabase.from('tutor_schedule').upsert(scheduleRows);
+    if (error) throw error;
+  }
+
+  const { data: existingSessions, error: exErr } = await supabase.from('tutor_sessions').select('id').eq('user_id', userId);
+  if (exErr) throw exErr;
+  const keepSessionIds = new Set(sessionRows.map((r) => r.id));
+  for (const row of existingSessions || []) {
+    if (!keepSessionIds.has(row.id)) {
+      const { error } = await supabase.from('tutor_sessions').delete().eq('user_id', userId).eq('id', row.id);
+      if (error) throw error;
+    }
+  }
+  if (sessionRows.length) {
+    const { error } = await supabase.from('tutor_sessions').upsert(sessionRows);
+    if (error) throw error;
+  }
+}
+
+function AuthScreen() {
+  const [mode, setMode] = useState('login');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+
+  const submit = async () => {
+    setBusy(true);
+    setMessage('');
+    setError('');
+    try {
+      if (mode === 'signup') {
+        const { data, error } = await supabase.auth.signUp({ email: email.trim(), password });
+        if (error) throw error;
+        if (!data.session) {
+          setMessage('สมัครสำเร็จ กรุณาตรวจสอบอีเมลเพื่อยืนยันบัญชี แล้วกลับมาเข้าสู่ระบบ');
+          setMode('login');
+        }
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+        if (error) throw error;
+      }
+    } catch (e) {
+      setError(e.message || 'เข้าสู่ระบบไม่สำเร็จ');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div style={{ background: C.paper, color: C.ink }} className="min-h-screen flex items-center justify-center p-4">
+      <Card className="w-full max-w-sm">
+        <div style={{ color: C.pine }} className="text-xl font-semibold">สมุดสอนพิเศษ</div>
+        <div style={{ color: C.inkSoft }} className="text-sm mt-1 mb-5">เข้าสู่ระบบเพื่อเก็บข้อมูลบนฐานข้อมูลกลาง</div>
+        <Field label="อีเมล">
+          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg" />
+        </Field>
+        <Field label="รหัสผ่าน">
+          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg" />
+        </Field>
+        {error && <div style={{ color: C.brick }} className="text-sm mb-3">{error}</div>}
+        {message && <div style={{ color: C.pine }} className="text-sm mb-3">{message}</div>}
+        <button onClick={submit} disabled={busy || !email || password.length < 6} style={{ background: C.pine, color: C.paper }} className="w-full text-sm font-medium py-2.5 rounded-lg disabled:opacity-40">
+          {busy ? 'กำลังดำเนินการ...' : mode === 'login' ? 'เข้าสู่ระบบ' : 'สร้างบัญชี'}
+        </button>
+        <button onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); setError(''); setMessage(''); }} style={{ color: C.pineDark }} className="w-full text-xs font-medium mt-3 underline">
+          {mode === 'login' ? 'ยังไม่มีบัญชี? สร้างบัญชี' : 'มีบัญชีแล้ว? เข้าสู่ระบบ'}
+        </button>
+      </Card>
+    </div>
+  );
+}
 
 export default function App() {
   const [tab, setTab] = useState('dashboard');
@@ -47,37 +295,144 @@ export default function App() {
   const [schedule, setSchedule] = useState([]);
   const [sessions, setSessions] = useState([]);
   const [loaded, setLoaded] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
+  const [user, setUser] = useState(null);
   const [toast, setToast] = useState('');
 
   useEffect(() => {
-    try {
-      const s = window.localStorage.getItem('tutor-app:students');
-      const sc = window.localStorage.getItem('tutor-app:schedule');
-      const se = window.localStorage.getItem('tutor-app:sessions');
-      if (s) setStudents(JSON.parse(s));
-      if (sc) setSchedule(JSON.parse(sc));
-      if (se) setSessions(JSON.parse(se));
-    } catch (e) {
-      console.error(e);
-    } finally {
+    let mounted = true;
+
+    const initialize = async () => {
+      const { data } = await supabase.auth.getSession();
+      if (!mounted) return;
+      if (data.session?.user) {
+        setUser(data.session.user);
+        try {
+          const loadedData = await loadTutorData(data.session.user.id);
+          if (!mounted) return;
+          setStudents(loadedData.students);
+          setSchedule(loadedData.schedule);
+          setSessions(loadedData.sessions);
+        } catch (e) {
+          console.error(e);
+        }
+      }
+      setAuthChecked(true);
       setLoaded(true);
-    }
+    };
+
+    initialize();
+
+    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (!mounted) return;
+      if (!session?.user) {
+        setUser(null);
+        setStudents([]);
+        setSchedule([]);
+        setSessions([]);
+        setLoaded(true);
+        return;
+      }
+      setUser(session.user);
+      try {
+        const loadedData = await loadTutorData(session.user.id);
+        if (!mounted) return;
+        setStudents(loadedData.students);
+        setSchedule(loadedData.schedule);
+        setSessions(loadedData.sessions);
+      } catch (e) {
+        console.error(e);
+      }
+      setLoaded(true);
+    });
+
+    return () => {
+      mounted = false;
+      listener.subscription.unsubscribe();
+    };
   }, []);
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 2200); };
 
-  const persist = useCallback((key, value) => {
+  const updateStudents = async (next) => {
+    setStudents(next);
+    if (!user) return;
     try {
-      window.localStorage.setItem(`tutor-app:${key}`, JSON.stringify(value));
+      const currentIds = new Set(next.map((s) => s.id));
+      const { data: existing, error: readError } = await supabase.from('tutor_students').select('id').eq('user_id', user.id);
+      if (readError) throw readError;
+      for (const row of existing || []) {
+        if (!currentIds.has(row.id)) {
+          const { error } = await supabase.from('tutor_students').delete().eq('user_id', user.id).eq('id', row.id);
+          if (error) throw error;
+        }
+      }
+      const rows = next.map((s) => ({ id: s.id, user_id: user.id, name: s.name, rate: Number(s.rate) }));
+      if (rows.length) {
+        const { error } = await supabase.from('tutor_students').upsert(rows);
+        if (error) throw error;
+      }
     } catch (e) {
       console.error(e);
-      showToast('บันทึกไม่สำเร็จ (พื้นที่จัดเก็บของเบราว์เซอร์อาจเต็ม)');
+      showToast('บันทึกข้อมูลไม่สำเร็จ');
     }
-  }, []);
+  };
 
-  const updateStudents = (next) => { setStudents(next); persist('students', next); };
-  const updateSchedule = (next) => { setSchedule(next); persist('schedule', next); };
-  const updateSessions = (next) => { setSessions(next); persist('sessions', next); };
+  const updateSchedule = async (next) => {
+    setSchedule(next);
+    if (!user) return;
+    try {
+      const currentIds = new Set(next.map((s) => s.id));
+      const { data: existing, error: readError } = await supabase.from('tutor_schedule').select('id').eq('user_id', user.id);
+      if (readError) throw readError;
+      for (const row of existing || []) {
+        if (!currentIds.has(row.id)) {
+          const { error } = await supabase.from('tutor_schedule').delete().eq('user_id', user.id).eq('id', row.id);
+          if (error) throw error;
+        }
+      }
+      const rows = next.map((s) => ({
+        id: s.id, user_id: user.id, student_id: s.studentId, recurring: Boolean(s.recurring),
+        day: s.recurring ? Number(s.day) : null, date: s.recurring ? null : s.date,
+        start_time: s.start, end_time: s.end,
+      }));
+      if (rows.length) {
+        const { error } = await supabase.from('tutor_schedule').upsert(rows);
+        if (error) throw error;
+      }
+    } catch (e) {
+      console.error(e);
+      showToast('บันทึกตารางสอนไม่สำเร็จ');
+    }
+  };
+
+  const updateSessions = async (next) => {
+    setSessions(next);
+    if (!user) return;
+    try {
+      const currentIds = new Set(next.map((s) => s.id));
+      const { data: existing, error: readError } = await supabase.from('tutor_sessions').select('id').eq('user_id', user.id);
+      if (readError) throw readError;
+      for (const row of existing || []) {
+        if (!currentIds.has(row.id)) {
+          const { error } = await supabase.from('tutor_sessions').delete().eq('user_id', user.id).eq('id', row.id);
+          if (error) throw error;
+        }
+      }
+      const rows = next.map((s) => ({
+        id: s.id, user_id: user.id, student_id: s.studentId || null, student_name: s.studentName || '',
+        session_date: s.date, hours: Number(s.hours), rate: Number(s.rate), note: s.note || '',
+        invoiced: Boolean(s.invoiced), paid: Boolean(s.paid), source_slot_id: s.sourceSlotId || null,
+      }));
+      if (rows.length) {
+        const { error } = await supabase.from('tutor_sessions').upsert(rows);
+        if (error) throw error;
+      }
+    } catch (e) {
+      console.error(e);
+      showToast('บันทึกคาบสอนไม่สำเร็จ');
+    }
+  };
 
   const getStudent = (id) => students.find((s) => s.id === id);
 
@@ -91,13 +446,15 @@ export default function App() {
     { id: 'export', label: 'ส่งออกข้อมูล', icon: Download },
   ];
 
-  if (!loaded) {
+  if (!authChecked || !loaded) {
     return (
       <div style={{ background: C.paper, color: C.inkSoft }} className="w-full min-h-screen flex items-center justify-center text-sm">
-        กำลังโหลดข้อมูล...
+        กำลังเชื่อมต่อฐานข้อมูล...
       </div>
     );
   }
+
+  if (!user) return <AuthScreen />;
 
   return (
     <div style={{ background: C.paper, color: C.ink }} className="w-full min-h-screen flex flex-col md:flex-row font-sans">
@@ -112,35 +469,25 @@ export default function App() {
             const Icon = n.icon;
             const active = tab === n.id;
             return (
-              <button
-                key={n.id}
-                onClick={() => setTab(n.id)}
-                style={active ? { background: C.pineTint, color: C.pineDark } : { color: C.inkSoft }}
-                className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors text-left"
-              >
-                <Icon size={17} />
-                {n.label}
+              <button key={n.id} onClick={() => setTab(n.id)} style={active ? { background: C.pineTint, color: C.pineDark } : { color: C.inkSoft }} className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors text-left">
+                <Icon size={17} />{n.label}
               </button>
             );
           })}
         </nav>
+        <button onClick={() => supabase.auth.signOut()} style={{ color: C.inkSoft }} className="mt-auto mx-2 text-xs text-left py-2">
+          ออกจากระบบ
+        </button>
       </div>
 
-      {/* Mobile top nav */}
       <div style={{ borderBottom: `1px solid ${C.line}`, background: C.paper }} className="md:hidden sticky top-0 z-20 overflow-x-auto">
         <div className="flex gap-1 px-3 py-3 min-w-max">
           {NAV.map((n) => {
             const Icon = n.icon;
             const active = tab === n.id;
             return (
-              <button
-                key={n.id}
-                onClick={() => setTab(n.id)}
-                style={active ? { background: C.pineTint, color: C.pineDark } : { color: C.inkSoft }}
-                className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap"
-              >
-                <Icon size={16} />
-                {n.label}
+              <button key={n.id} onClick={() => setTab(n.id)} style={active ? { background: C.pineTint, color: C.pineDark } : { color: C.inkSoft }} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap">
+                <Icon size={16} />{n.label}
               </button>
             );
           })}
@@ -148,28 +495,16 @@ export default function App() {
       </div>
 
       <div className="flex-1 px-4 py-6 md:px-10 md:py-10 max-w-4xl mx-auto w-full">
-        {tab === 'dashboard' && (
-          <Dashboard students={students} sessions={sessions} schedule={schedule} updateSessions={updateSessions} getStudent={getStudent} showToast={showToast} setTab={setTab} />
-        )}
+        {tab === 'dashboard' && <Dashboard students={students} sessions={sessions} schedule={schedule} updateSessions={updateSessions} getStudent={getStudent} showToast={showToast} setTab={setTab} />}
         {tab === 'students' && <StudentsTab students={students} updateStudents={updateStudents} sessions={sessions} />}
-        {tab === 'schedule' && (
-          <ScheduleTab students={students} schedule={schedule} updateSchedule={updateSchedule} sessions={sessions} updateSessions={updateSessions} getStudent={getStudent} showToast={showToast} />
-        )}
+        {tab === 'schedule' && <ScheduleTab students={students} schedule={schedule} updateSchedule={updateSchedule} sessions={sessions} updateSessions={updateSessions} getStudent={getStudent} showToast={showToast} />}
         {tab === 'calendar' && <CalendarTab students={students} schedule={schedule} showToast={showToast} />}
-        {tab === 'sessions' && (
-          <SessionsTab students={students} sessions={sessions} updateSessions={updateSessions} getStudent={getStudent} showToast={showToast} />
-        )}
-        {tab === 'invoice' && (
-          <InvoiceTab students={students} sessions={sessions} updateSessions={updateSessions} showToast={showToast} />
-        )}
+        {tab === 'sessions' && <SessionsTab students={students} sessions={sessions} updateSessions={updateSessions} getStudent={getStudent} showToast={showToast} />}
+        {tab === 'invoice' && <InvoiceTab students={students} sessions={sessions} updateSessions={updateSessions} showToast={showToast} />}
         {tab === 'export' && <ExportTab students={students} sessions={sessions} />}
       </div>
 
-      {toast && (
-        <div style={{ background: C.ink, color: C.paper }} className="fixed bottom-5 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg text-sm shadow-lg z-50">
-          {toast}
-        </div>
-      )}
+      {toast && <div style={{ background: C.ink, color: C.paper }} className="fixed bottom-5 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg text-sm shadow-lg z-50">{toast}</div>}
     </div>
   );
 }
