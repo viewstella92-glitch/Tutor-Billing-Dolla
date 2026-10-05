@@ -288,6 +288,10 @@ function ProgressIntelligence({ students, sessions }) {
     return {...s,historyCount:history.length,current,change,gap,trend};
   });
   const needsAttention=rows.filter(x=>x.trend==='ต้องติดตาม'||(x.gap!=null&&x.gap>10));
+  const chartStudentId = rows[0]?.id || '';
+  const [selectedId, setSelectedId] = useState(chartStudentId);
+  const selected = rows.find(x=>x.id===selectedId) || rows[0];
+  const chartData = selected ? sessions.filter(x=>x.studentId===selected.id).sort((a,b)=>a.date.localeCompare(b.date)).map((x,i)=>{ const m=(x.note||'').match(/คะแนน[:： ]*(\\d+(?:\\.\\d+)?)/); return m ? {date: x.date.slice(5), score:Number(m[1]), index:i+1} : null; }).filter(Boolean) : [];
   return (
     <div className="space-y-4">
       <SectionTitle sub="ดูแนวโน้มคะแนนและนักเรียนที่ควรติดตาม">Progress Intelligence</SectionTitle>
@@ -300,6 +304,16 @@ function ProgressIntelligence({ students, sessions }) {
           <div className="font-medium text-sm mb-2">ควรติดตามเป็นพิเศษ</div>
           <div className="space-y-2">{needsAttention.map(s=><div key={s.id} className="text-sm"><b>{s.name}</b> · {s.trend}{s.gap!=null?' · ห่างเป้าหมาย '+s.gap+' คะแนน':''}</div>)}</div>
         </Card>}
+        {rows.length>0&&<Card>
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div><div className="font-medium text-sm">กราฟคะแนนรายคาบ</div><div className="text-xs mt-1" style={{color:C.inkSoft}}>ดึงคะแนนจากโน้ตที่บันทึกในแต่ละคาบ</div></div>
+            <select value={selected?.id||''} onChange={e=>setSelectedId(e.target.value)} style={inputStyle} className="text-sm px-2.5 py-2 rounded-lg max-w-40">
+              {rows.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </div>
+          {chartData.length<2 ? <EmptyState text="ต้องมีคะแนนอย่างน้อย 2 คาบ จึงจะแสดงแนวโน้ม"/> :
+            <div className="h-56"><ResponsiveContainer width="100%" height="100%"><BarChart data={chartData} margin={{top:8,right:8,left:-20,bottom:0}}><CartesianGrid strokeDasharray="3 3"/><XAxis dataKey="date"/><YAxis domain={[0,100]}/><Tooltip formatter={(value)=>[value,'คะแนน']}/><Bar dataKey="score" fill={C.pine} radius={[4,4,0,0]}/></BarChart></ResponsiveContainer></div>}
+        </Card>
         <div className="space-y-2">{rows.map(s=><Card key={s.id}>
           <div className="flex justify-between gap-3">
             <div><div className="font-medium text-sm">{s.name}</div><div className="text-xs mt-1" style={{color:C.inkSoft}}>{s.historyCount} คาบ · {s.current!=null?'คะแนนล่าสุด '+s.current:'ยังไม่มีคะแนน'}</div></div>
