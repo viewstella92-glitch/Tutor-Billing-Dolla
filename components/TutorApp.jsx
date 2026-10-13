@@ -665,7 +665,7 @@ function StudentsTab({ students, updateStudents, sessions }) {
           <Field label="วันที่เป้าหมาย"><input type="date" value={form.targetDate} onChange={e=>setForm({...form,targetDate:e.target.value})} style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg"/></Field>
         </div>
         <Field label="สไตล์การเรียน / วิธีที่ได้ผล"><input value={form.learningStyle} onChange={e=>setForm({...form,learningStyle:e.target.value})} placeholder="เช่น ชอบภาพ ชอบทำโจทย์ ชอบให้ยกตัวอย่าง" style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg"/></Field>
-        <Field label="โน้ตสำหรับติวเตอร์"><textarea value={form.notes} onChange={e=>setForm({...form,notes:e.target.value})} placeholder="ข้อมูลสำคัญเกี่ยวกับนักเรียน" style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg min-h-20"/></Field>
+        <Field label="โน้ตสำหรับติวเตอร์"><textarea value={form.notes} onChange={e=>setForm({...form,notes:e.target.value})} placeholder="ข้อมูลสำคัญเกี่ยวกับนักเรียน" style={inputStyle} className="w-full text-base px-3 py-2 rounded-lg min-h-20"/></Field>
         <ModalActions onCancel={()=>setEditing(null)} onSave={save}/>
       </Modal>}
 
@@ -886,8 +886,8 @@ function ParentReport({ student, sessions, onClose }) {
           </div>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 no-print">
-          <Field label="ข้อความส่วนตัวจากติวเตอร์"><textarea value={tutorNote} onChange={e=>setTutorNote(e.target.value)} placeholder="เช่น วันนี้น้องทำโจทย์กราฟได้เองแล้ว ดีใจมากค่ะ" style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg min-h-20"/></Field>
-          <Field label="การบ้าน / สิ่งที่อยากให้ทบทวน"><textarea value={homework} onChange={e=>setHomework(e.target.value)} style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg min-h-20"/></Field>
+          <Field label="ข้อความส่วนตัวจากติวเตอร์"><textarea value={tutorNote} onChange={e=>setTutorNote(e.target.value)} placeholder="เช่น วันนี้น้องทำโจทย์กราฟได้เองแล้ว ดีใจมากค่ะ" style={inputStyle} className="w-full text-base px-3 py-2 rounded-lg min-h-20"/></Field>
+          <Field label="การบ้าน / สิ่งที่อยากให้ทบทวน"><textarea value={homework} onChange={e=>setHomework(e.target.value)} style={inputStyle} className="w-full text-base px-3 py-2 rounded-lg min-h-20"/></Field>
           <Field label="หัวข้อคาบถัดไป"><input value={nextTopic} onChange={e=>setNextTopic(e.target.value)} style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg"/></Field>
           <div className="grid grid-cols-2 gap-2"><Field label="วันนัดครั้งถัดไป"><input type="date" value={nextDate} onChange={e=>setNextDate(e.target.value)} style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg"/></Field><Field label="เวลา"><input type="time" value={nextTime} onChange={e=>setNextTime(e.target.value)} style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg"/></Field></div>
         </div>
@@ -1422,19 +1422,19 @@ function SessionsTab({ students, sessions, updateSessions, getStudent, showToast
               <textarea autoFocus rows={2} value={form.topic} onChange={(e) => setForm({ ...form, topic: e.target.value })} placeholder="ระบุหัวข้อย่อยหรือเนื้อหาที่เรียน พิมพ์ได้หลายบรรทัด" style={{ ...inputStyle, resize: "vertical", lineHeight: 1.75 }} className="w-full text-base px-3 py-3 rounded-xl min-h-20 focus:outline-none focus:ring-2 focus:ring-emerald-700/20" />
             </Field>
             <Field label="ผลการเรียน / ทำได้แค่ไหน">
-              <textarea rows={2} value={form.performance} onChange={(e) => setForm({ ...form, performance: e.target.value })} placeholder="นักเรียนทำอะไรได้แล้วบ้าง มีจุดไหนที่ทำได้ดีขึ้น" style={{ ...inputStyle, resize: "vertical", lineHeight: 1.75 }} className="w-full text-sm px-3 py-3 rounded-xl min-h-20 focus:outline-none focus:ring-2 focus:ring-emerald-700/20" />
+              <textarea rows={2} value={form.performance} onChange={(e) => setForm({ ...form, performance: e.target.value })} placeholder="นักเรียนทำอะไรได้แล้วบ้าง มีจุดไหนที่ทำได้ดีขึ้น" style={{ ...inputStyle, resize: "vertical", lineHeight: 1.75 }} className="w-full text-base px-3 py-3 rounded-xl min-h-20 focus:outline-none focus:ring-2 focus:ring-emerald-700/20" />
             </Field>
             <Field label="คะแนน (ถ้ามี)">
               <input type="number" min="0" max="100" value={form.score} onChange={(e) => setForm({ ...form, score: e.target.value })} placeholder="เช่น 72" style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg" />
             </Field>
             <Field label="จุดที่ยังติด">
-              <textarea rows={2} value={form.stuck} onChange={(e) => setForm({ ...form, stuck: e.target.value })} placeholder="ระบุเรื่องที่ยังไม่เข้าใจหรือควรทบทวน" style={{ ...inputStyle, resize: "vertical", lineHeight: 1.75 }} className="w-full text-sm px-3 py-3 rounded-xl min-h-20 focus:outline-none focus:ring-2 focus:ring-emerald-700/20" />
+              <textarea rows={2} value={form.stuck} onChange={(e) => setForm({ ...form, stuck: e.target.value })} placeholder="ระบุเรื่องที่ยังไม่เข้าใจหรือควรทบทวน" style={{ ...inputStyle, resize: "vertical", lineHeight: 1.75 }} className="w-full text-base px-3 py-3 rounded-xl min-h-20 focus:outline-none focus:ring-2 focus:ring-emerald-700/20" />
             </Field>
             <Field label="การบ้าน / สิ่งที่ต้องทำต่อ">
-              <textarea rows={2} value={form.homework} onChange={(e) => setForm({ ...form, homework: e.target.value })} placeholder="ระบุการบ้าน แบบฝึกหัด หรือสิ่งที่ต้องเตรียมสำหรับคาบหน้า" style={{ ...inputStyle, resize: "vertical", lineHeight: 1.75 }} className="w-full text-sm px-3 py-3 rounded-xl min-h-20 focus:outline-none focus:ring-2 focus:ring-emerald-700/20" />
+              <textarea rows={2} value={form.homework} onChange={(e) => setForm({ ...form, homework: e.target.value })} placeholder="ระบุการบ้าน แบบฝึกหัด หรือสิ่งที่ต้องเตรียมสำหรับคาบหน้า" style={{ ...inputStyle, resize: "vertical", lineHeight: 1.75 }} className="w-full text-base px-3 py-3 rounded-xl min-h-20 focus:outline-none focus:ring-2 focus:ring-emerald-700/20" />
             </Field>
             <Field label="โน้ตเพิ่มเติม">
-              <textarea rows={4} value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="รายละเอียดเพิ่มเติม เช่น ตัวอย่างโจทย์ที่ทำ ลำดับเนื้อหา หรือข้อความที่อยากแจ้งผู้ปกครอง" style={{ ...inputStyle, resize: "vertical", lineHeight: 1.8 }} className="w-full text-sm px-3 py-3 rounded-xl min-h-28 focus:outline-none focus:ring-2 focus:ring-emerald-700/20" />
+              <textarea rows={4} value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="รายละเอียดเพิ่มเติม เช่น ตัวอย่างโจทย์ที่ทำ ลำดับเนื้อหา หรือข้อความที่อยากแจ้งผู้ปกครอง" style={{ ...inputStyle, resize: "vertical", lineHeight: 1.8 }} className="w-full text-base px-3 py-3 rounded-xl min-h-28 focus:outline-none focus:ring-2 focus:ring-emerald-700/20" />
             </Field>
           </div>
 
