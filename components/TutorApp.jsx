@@ -201,11 +201,21 @@ export default function App() {
   };
 
   const updateSessions = async (next, deletedIds = []) => {
-    setSessions(next);
     try {
-      for (const id of deletedIds) { const { error } = await supabase.from('tutor_sessions').delete().eq('id', id).eq('user_id', OWNER_ID); if (error) throw error; }
-      if (next.length) await supabase.from('tutor_sessions').upsert(next.map(x => ({ id:x.id, user_id:OWNER_ID, student_id:x.studentId||null, student_name:x.studentName||'', session_date:x.date, hours:Number(x.hours), rate:Number(x.rate), note:x.note||'', invoiced:Boolean(x.invoiced), paid:Boolean(x.paid), source_slot_id:x.sourceSlotId||null })));
-    } catch (e) { console.error(e); showToast('บันทึกคาบสอนไม่สำเร็จ'); }
+      for (const id of deletedIds) {
+        const { error } = await supabase.from('tutor_sessions').delete().eq('id', id).eq('user_id', OWNER_ID);
+        if (error) throw error;
+      }
+      if (next.length) {
+        const { error } = await supabase.from('tutor_sessions').upsert(next.map(x => ({ id:x.id, user_id:OWNER_ID, student_id:x.studentId||null, student_name:x.studentName||'', session_date:x.date, hours:Number(x.hours), rate:Number(x.rate), note:x.note||'', invoiced:Boolean(x.invoiced), paid:Boolean(x.paid), source_slot_id:x.sourceSlotId||null })));
+        if (error) throw error;
+      }
+      setSessions(next);
+    } catch (e) {
+      console.error(e);
+      showToast('บันทึกคาบสอนไม่สำเร็จ');
+      throw e;
+    }
   };
 
   const getStudent = (id) => students.find((s) => s.id === id);
