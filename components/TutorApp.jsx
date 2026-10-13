@@ -1218,7 +1218,7 @@ function ScheduleTab({ students, schedule, updateSchedule, sessions, updateSessi
             <input type="number" step="0.25" value={confirmSlot.hours} onChange={(e) => setConfirmSlot({ ...confirmSlot, hours: e.target.value })} style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg" />
           </Field>
           <Field label="โน้ต (ไม่บังคับ)">
-            <input value={confirmSlot.note} onChange={(e) => setConfirmSlot({ ...confirmSlot, note: e.target.value })} placeholder="สอนอะไรไปบ้าง" style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg" />
+            <textarea rows={5} value={confirmSlot.note} onChange={(e) => setConfirmSlot({ ...confirmSlot, note: e.target.value })} placeholder="สรุปสิ่งที่สอน เนื้อหาที่เรียน ปัญหาที่พบ หรือการบ้าน...\nพิมพ์ขึ้นบรรทัดใหม่ได้" style={{ ...inputStyle, resize: "vertical", whiteSpace: "pre-wrap", lineHeight: 1.75 }} className="w-full text-sm px-3 py-3 rounded-xl min-h-32 focus:outline-none focus:ring-2 focus:ring-emerald-700/20" />
           </Field>
           <ModalActions onCancel={() => setConfirmSlot(null)} onSave={saveConfirm} saveLabel="บันทึกคาบสอน" />
         </Modal>
@@ -1488,7 +1488,7 @@ function SessionsTab({ students, sessions, updateSessions, getStudent, showToast
     if (form.stuck) parts.push(`ติดขัด: ${form.stuck}`);
     if (form.homework) parts.push(`การบ้าน: ${form.homework}`);
     if (form.note) parts.push(form.note);
-    return parts.join(' | ');
+    return parts.join('\n\n');
   };
 
   const addManual = () => {
@@ -1534,7 +1534,7 @@ function SessionsTab({ students, sessions, updateSessions, getStudent, showToast
               <div className="min-w-0">
                 <div className="text-sm font-medium">{name}</div>
                 <div style={{ color: C.inkSoft }} className="text-xs">{fmtDateThai(s.date)} · {fmtHours(s.hours)} ชม.</div>
-                {s.note && <div style={{ color: C.inkSoft }} className="text-xs mt-1 leading-relaxed">{s.note}</div>}
+                {s.note && <div style={{ color: C.inkSoft, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }} className="text-sm mt-2 leading-7">{s.note}</div>}
               </div>
               <div className="flex items-center gap-3 shrink-0">
                 <span style={{ color: C.gold }} className="text-sm font-medium">{fmtMoney(s.hours * s.rate)}</span>
@@ -1573,29 +1573,29 @@ function SessionsTab({ students, sessions, updateSessions, getStudent, showToast
               <input value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} placeholder={student?.subjects?.[0] || 'เช่น คณิตศาสตร์'} style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg" />
             </Field>
             <Field label="เรื่องที่สอน">
-              <input value={form.topic} onChange={(e) => setForm({ ...form, topic: e.target.value })} placeholder="เช่น สมการกำลังสอง" style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg" />
+              <textarea rows={2} value={form.topic} onChange={(e) => setForm({ ...form, topic: e.target.value })} placeholder="ระบุหัวข้อย่อยหรือเนื้อหาที่เรียน พิมพ์ได้หลายบรรทัด" style={{ ...inputStyle, resize: "vertical", lineHeight: 1.75 }} className="w-full text-sm px-3 py-3 rounded-xl min-h-20 focus:outline-none focus:ring-2 focus:ring-emerald-700/20" />
             </Field>
             <Field label="ผลการเรียน / ทำได้แค่ไหน">
-              <input value={form.performance} onChange={(e) => setForm({ ...form, performance: e.target.value })} placeholder="เช่น ทำโจทย์พื้นฐานได้ แต่ยังพลาดตอนประยุกต์" style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg" />
+              <textarea rows={2} value={form.performance} onChange={(e) => setForm({ ...form, performance: e.target.value })} placeholder="นักเรียนทำอะไรได้แล้วบ้าง มีจุดไหนที่ทำได้ดีขึ้น" style={{ ...inputStyle, resize: "vertical", lineHeight: 1.75 }} className="w-full text-sm px-3 py-3 rounded-xl min-h-20 focus:outline-none focus:ring-2 focus:ring-emerald-700/20" />
             </Field>
             <Field label="คะแนน (ถ้ามี)">
               <input type="number" min="0" max="100" value={form.score} onChange={(e) => setForm({ ...form, score: e.target.value })} placeholder="เช่น 72" style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg" />
             </Field>
             <Field label="จุดที่ยังติด">
-              <input value={form.stuck} onChange={(e) => setForm({ ...form, stuck: e.target.value })} placeholder="เช่น แยกโจทย์ไม่ออกว่าใช้สูตรไหน" style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg" />
+              <textarea rows={2} value={form.stuck} onChange={(e) => setForm({ ...form, stuck: e.target.value })} placeholder="ระบุเรื่องที่ยังไม่เข้าใจหรือควรทบทวน" style={{ ...inputStyle, resize: "vertical", lineHeight: 1.75 }} className="w-full text-sm px-3 py-3 rounded-xl min-h-20 focus:outline-none focus:ring-2 focus:ring-emerald-700/20" />
             </Field>
             <Field label="การบ้าน / สิ่งที่ต้องทำต่อ">
-              <input value={form.homework} onChange={(e) => setForm({ ...form, homework: e.target.value })} placeholder="เช่น ทำแบบฝึกหัดข้อ 1–10" style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg" />
+              <textarea rows={2} value={form.homework} onChange={(e) => setForm({ ...form, homework: e.target.value })} placeholder="ระบุการบ้าน แบบฝึกหัด หรือสิ่งที่ต้องเตรียมสำหรับคาบหน้า" style={{ ...inputStyle, resize: "vertical", lineHeight: 1.75 }} className="w-full text-sm px-3 py-3 rounded-xl min-h-20 focus:outline-none focus:ring-2 focus:ring-emerald-700/20" />
             </Field>
             <Field label="โน้ตเพิ่มเติม">
-              <input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="ถ้ามี" style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg" />
+              <textarea rows={4} value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="รายละเอียดเพิ่มเติม เช่น ตัวอย่างโจทย์ที่ทำ ลำดับเนื้อหา หรือข้อความที่อยากแจ้งผู้ปกครอง" style={{ ...inputStyle, resize: "vertical", lineHeight: 1.8 }} className="w-full text-sm px-3 py-3 rounded-xl min-h-28 focus:outline-none focus:ring-2 focus:ring-emerald-700/20" />
             </Field>
           </div>
 
           {preview && (
             <div className="mb-2">
               <div className="text-xs mb-1" style={{ color: C.inkSoft }}>ตัวอย่างบันทึกที่จะถูกเก็บในประวัติ</div>
-              <div style={{ background: C.paper, border: `1px solid ${C.line}` }} className="rounded-lg p-3 text-xs leading-relaxed">{preview}</div>
+              <div style={{ background: C.paper, border: `1px solid ${C.line}`, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }} className="rounded-xl p-4 text-sm leading-7">{preview}</div>
             </div>
           )}
 
@@ -1883,7 +1883,7 @@ function Modal({ title, children, onClose }) {
     <div className="fixed inset-0 z-40 flex items-end sm:items-center justify-center p-0 sm:p-4" style={{ background: 'rgba(35,40,43,0.4)' }} onClick={onClose}>
       <div
         style={{ background: C.surface, maxHeight: '90vh' }}
-        className="w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl p-5 overflow-y-auto"
+        className="w-full sm:max-w-lg rounded-t-2xl sm:rounded-2xl p-5 sm:p-6 overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-4">
