@@ -20,7 +20,8 @@ export default function InvoiceCard({invoice,student,sessions=[],settings={},lan
  const sorted=useMemo(()=>[...sessions].sort((a,b)=>a.date.localeCompare(b.date)),[sessions]);
  const total=Number(invoice?.total??sorted.reduce((sum,s)=>sum+Number(s.hours||0)*Number(s.rate||0),0));
  const isPaid=sorted.length>0&&sorted.every(s=>Boolean(s.paid));
- const issued=dateFmt((invoice?.created_at||new Date().toISOString()).slice(0,10),lang);
+ const issuedValue=(()=>{const d=invoice?.created_at?new Date(invoice.created_at):new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');})();
+ const issued=dateFmt(issuedValue,lang);
  const details=s=>noteDetails(s.note,lang);
  const textVersion=()=>[
   words.invoice+' · '+(invoice?.number||'—'),words.invoiceNo+': '+(invoice?.number||'—'),words.issued+': '+issued,
