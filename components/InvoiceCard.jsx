@@ -204,12 +204,12 @@ export default function InvoiceCard({ student, sessions = [], invoiceDates, tuto
     ctx.fillStyle=PALETTE.ink;ctx.font='400 14px sans-serif';let my=y+48;
     wrapThai(ctx,tutorMessage||'วันนี้น้องตั้งใจเรียนและค่อย ๆ พัฒนาขึ้นค่ะ',contentW-48).forEach(line=>{ctx.fillText(line,pad+18,my);my+=21;});
     y+=Math.max(76,my-y+14);
-    const nextLesson = student?.nextLesson || student?.nextSession || null;
-    if(nextLesson && (nextLesson.topic || nextLesson.date || nextLesson.time)){
+    const nextLessonToDraw = student?.nextLesson || student?.nextSession || null;
+    if(nextLessonToDraw && (nextLessonToDraw.topic || nextLessonToDraw.date || nextLessonToDraw.time)){
       rounded(ctx,pad,y,contentW,65,12,'#EAF3EF');
       ctx.fillStyle=PALETTE.pineDark;ctx.font='600 15px sans-serif';ctx.fillText('คาบหน้า',pad+16,y+24);
       ctx.fillStyle=PALETTE.ink;ctx.font='400 14px sans-serif';
-      wrapThai(ctx,[nextLesson.topic,nextLesson.date?fmtDateThai(nextLesson.date):'',nextLesson.time].filter(Boolean).join(' · '),contentW-42).slice(0,2).forEach((line,i)=>ctx.fillText(line,pad+16,y+46+i*19));
+      wrapThai(ctx,[nextLessonToDraw.topic,nextLessonToDraw.date?fmtDateThai(nextLessonToDraw.date):'',nextLessonToDraw.time].filter(Boolean).join(' · '),contentW-42).slice(0,2).forEach((line,i)=>ctx.fillText(line,pad+16,y+46+i*19));
       y+=78;
     }
     ctx.strokeStyle=PALETTE.line;ctx.lineWidth=1.5;ctx.setLineDash([5,5]);ctx.beginPath();ctx.moveTo(pad,y+4);ctx.lineTo(width-pad,y+4);ctx.stroke();ctx.setLineDash([]);
