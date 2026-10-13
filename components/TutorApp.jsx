@@ -1309,7 +1309,7 @@ function SessionsTab({ students, sessions, updateSessions, getStudent, showToast
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
     studentId: '', date: todayStr(), hours: '1',
-    subject: '', topic: '', performance: '', score: '', stuck: '', homework: '', note: '', sourceSlotId: undefined
+    subject: '', topic: '', performance: '', score: '', stuck: '', homework: '', enTopic: '', enPerformance: '', enStuck: '', enHomework: '', note: '', sourceSlotId: undefined
   });
 
   const sorted = [...sessions].sort((a, b) => b.date.localeCompare(a.date));
@@ -1319,14 +1319,14 @@ function SessionsTab({ students, sessions, updateSessions, getStudent, showToast
     if (!recordRequest?.slot) return;
     const requestedStudent = getStudent(recordRequest.slot.studentId);
     if (!requestedStudent) { clearRecordRequest?.(); return; }
-    setForm({ studentId: requestedStudent.id, date: recordRequest.date || todayStr(), hours: String(hoursBetween(recordRequest.slot.start, recordRequest.slot.end)), subject: (requestedStudent.subjects || [])[0] || '', topic: '', performance: '', score: '', stuck: '', homework: '', note: '', sourceSlotId: recordRequest.slot.id });
+    setForm({ studentId: requestedStudent.id, date: recordRequest.date || todayStr(), hours: String(hoursBetween(recordRequest.slot.start, recordRequest.slot.end)), subject: (requestedStudent.subjects || [])[0] || '', topic: '', performance: '', score: '', stuck: '', homework: '', enTopic: '', enPerformance: '', enStuck: '', enHomework: '', note: '', sourceSlotId: recordRequest.slot.id });
     setShowForm(true);
     clearRecordRequest?.();
   }, [recordRequest, getStudent, clearRecordRequest]);
 
   const resetForm = () => setForm({
     studentId: '', date: todayStr(), hours: '1',
-    subject: '', topic: '', performance: '', score: '', stuck: '', homework: '', note: ''
+    subject: '', topic: '', performance: '', score: '', stuck: '', homework: '', enTopic: '', enPerformance: '', enStuck: '', enHomework: '', note: ''
   });
 
   const buildSmartNote = () => {
@@ -1336,6 +1336,10 @@ function SessionsTab({ students, sessions, updateSessions, getStudent, showToast
     if (form.score) parts.push(`คะแนน: ${form.score}`);
     if (form.stuck) parts.push(`ติดขัด: ${form.stuck}`);
     if (form.homework) parts.push(`การบ้าน: ${form.homework}`);
+    if (form.enTopic) parts.push(`EN topic: ${form.enTopic}`);
+    if (form.enPerformance) parts.push(`EN result: ${form.enPerformance}`);
+    if (form.enStuck) parts.push(`EN stuck: ${form.enStuck}`);
+    if (form.enHomework) parts.push(`EN homework: ${form.enHomework}`);
     if (form.note) parts.push(form.note);
     return parts.join('\n\n');
   };
@@ -1436,6 +1440,22 @@ function SessionsTab({ students, sessions, updateSessions, getStudent, showToast
             <Field label="การบ้าน / สิ่งที่ต้องทำต่อ">
               <textarea rows={2} value={form.homework} onChange={(e) => setForm({ ...form, homework: e.target.value })} placeholder="ระบุการบ้าน แบบฝึกหัด หรือสิ่งที่ต้องเตรียมสำหรับคาบหน้า" style={{ ...inputStyle, resize: "vertical", lineHeight: 1.75 }} className="w-full text-base px-3 py-3 rounded-xl min-h-20 focus:outline-none focus:ring-2 focus:ring-emerald-700/20" />
             </Field>
+            <div className="mt-3 border-t pt-3" style={{borderColor:C.line}}>
+              <div className="mb-2 text-sm font-semibold" style={{color:C.pineDark}}>English details (optional)</div>
+              <p className="mb-3 text-xs" style={{color:C.inkSoft}}>กรอกภาษาอังกฤษเพิ่มได้ เพื่อสลับทำรายงานให้ผู้ปกครองภาษาอังกฤษได้ หากเว้นว่างระบบจะใช้ข้อมูลภาษาไทยแทน</p>
+              <Field label="Lesson topic (EN)">
+                <textarea rows={2} value={form.enTopic} onChange={(e) => setForm({ ...form, enTopic: e.target.value })} placeholder="e.g. Linear equations and word problems" style={{ ...inputStyle, resize: "vertical", lineHeight: 1.6 }} className="w-full text-base px-3 py-3 rounded-xl min-h-16" />
+              </Field>
+              <Field label="Learning outcome (EN)">
+                <textarea rows={2} value={form.enPerformance} onChange={(e) => setForm({ ...form, enPerformance: e.target.value })} placeholder="What the student understood or improved" style={{ ...inputStyle, resize: "vertical", lineHeight: 1.6 }} className="w-full text-base px-3 py-3 rounded-xl min-h-16" />
+              </Field>
+              <Field label="Needs more practice (EN)">
+                <textarea rows={2} value={form.enStuck} onChange={(e) => setForm({ ...form, enStuck: e.target.value })} placeholder="Topics that need more practice" style={{ ...inputStyle, resize: "vertical", lineHeight: 1.6 }} className="w-full text-base px-3 py-3 rounded-xl min-h-16" />
+              </Field>
+              <Field label="Homework / next steps (EN)">
+                <textarea rows={2} value={form.enHomework} onChange={(e) => setForm({ ...form, enHomework: e.target.value })} placeholder="Homework and preparation for next lesson" style={{ ...inputStyle, resize: "vertical", lineHeight: 1.6 }} className="w-full text-base px-3 py-3 rounded-xl min-h-16" />
+              </Field>
+            </div>
             <Field label="โน้ตเพิ่มเติม">
               <textarea rows={4} value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="รายละเอียดเพิ่มเติม เช่น ตัวอย่างโจทย์ที่ทำ ลำดับเนื้อหา หรือข้อความที่อยากแจ้งผู้ปกครอง" style={{ ...inputStyle, resize: "vertical", lineHeight: 1.8 }} className="w-full text-base px-3 py-3 rounded-xl min-h-28 focus:outline-none focus:ring-2 focus:ring-emerald-700/20" />
             </Field>
