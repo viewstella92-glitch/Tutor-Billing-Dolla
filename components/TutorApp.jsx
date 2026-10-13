@@ -31,7 +31,7 @@ const MONTHS_TH = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.�
 function jsDayToIndex(jsDay) { return jsDay === 0 ? 6 : jsDay - 1; }
 function timeToMinutes(t) { const [h, m] = t.split(':').map(Number); return h * 60 + m; }
 function hoursBetween(start, end) { return Math.max(0, (timeToMinutes(end) - timeToMinutes(start)) / 60); }
-function todayStr() { return new Date().toISOString().slice(0, 10); }
+function todayStr() { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
 function monthStr(d) { return d.slice(0, 7); }
 function fmtMoney(n) { return '฿' + Math.round(n).toLocaleString('th-TH'); }
 function fmtHours(n) { return (Math.round(n * 100) / 100).toString().replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, ''); }
@@ -87,14 +87,12 @@ export default function App() {
             rate: Number(s.rate), note: s.note || '', invoiced: Boolean(s.invoiced),
             paid: Boolean(s.paid), source_slot_id: slotMap.get(s.sourceSlotId) || null,
           }));
-          if (studentsToInsert.length) await supabase.from('tutor_students').insert(studentsToInsert);
-          if (scheduleToInsert.length) await supabase.from('tutor_schedule').insert(scheduleToInsert);
-          if (sessionsToInsert.length) await supabase.from('tutor_sessions').insert(sessionsToInsert);
-          try {
-            localStorage.removeItem('tutor-app:students');
-            localStorage.removeItem('tutor-app:schedule');
-            localStorage.removeItem('tutor-app:sessions');
-          } catch {}
+          if (studentsToInsert.length) { const { error } = await supabase.from('tutor_students').insert(studentsToInsert); if (error) throw error; }
+          if (scheduleToInsert.length) { const { error } = await supabase.from('tutor_schedule').insert(scheduleToInsert); if (error) throw error; }
+          if (sessionsToInsert.length) { const { error } = await supabase.from('tutor_sessions').insert(sessionsToInsert); if (error) throw error; }
+          localStorage.removeItem('tutor-app:students');
+          localStorage.removeItem('tutor-app:schedule');
+          localStorage.removeItem('tutor-app:sessions');
         }
 
         const [a,b,c] = await Promise.all([
@@ -117,32 +115,26 @@ export default function App() {
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 2200); };
 
-  const updateStudents = async (next) => {
+  const updateStudents = async (next, deletedIds = []) => {
     setStudents(next);
     try {
-      const { data: old } = await supabase.from('tutor_students').select('id').eq('user_id', OWNER_ID);
-      const keep = new Set(next.map(x => x.id));
-      for (const row of old || []) if (!keep.has(row.id)) await supabase.from('tutor_students').delete().eq('id', row.id).eq('user_id', OWNER_ID);
+      for (const id of deletedIds) { const { error } = await supabase.from('tutor_students').delete().eq('id', id).eq('user_id', OWNER_ID); if (error) throw error; }
       if (next.length) await supabase.from('tutor_students').upsert(next.map(x => ({ id:x.id, user_id:OWNER_ID, name:x.name, rate:Number(x.rate), grade:x.grade||null, subjects:Array.isArray(x.subjects)?x.subjects:[], goals:x.goals||null, strengths:x.strengths||null, weaknesses:x.weaknesses||null, learning_style:x.learningStyle||null, notes:x.notes||null, status:x.status||'active', target_exam:x.targetExam||null, target_date:x.targetDate||null, baseline_score:x.baselineScore===''||x.baselineScore==null?null:Number(x.baselineScore), latest_score:x.latestScore===''||x.latestScore==null?null:Number(x.latestScore), target_score:x.targetScore===''||x.targetScore==null?null:Number(x.targetScore) })));
     } catch (e) { console.error(e); showToast('บันทึกนักเรียนไม่สำเร็จ'); }
   };
 
-  const updateSchedule = async (next) => {
+  const updateSchedule = async (next, deletedIds = []) => {
     setSchedule(next);
     try {
-      const { data: old } = await supabase.from('tutor_schedule').select('id').eq('user_id', OWNER_ID);
-      const keep = new Set(next.map(x => x.id));
-      for (const row of old || []) if (!keep.has(row.id)) await supabase.from('tutor_schedule').delete().eq('id', row.id).eq('user_id', OWNER_ID);
+      for (const id of deletedIds) { const { error } = await supabase.from('tutor_schedule').delete().eq('id', id).eq('user_id', OWNER_ID); if (error) throw error; }
       if (next.length) await supabase.from('tutor_schedule').upsert(next.map(x => ({ id:x.id, user_id:OWNER_ID, student_id:x.studentId, recurring:Boolean(x.recurring), day:x.recurring?Number(x.day):null, date:x.recurring?null:x.date, start_time:x.start, end_time:x.end })));
     } catch (e) { console.error(e); showToast('บันทึกตารางสอนไม่สำเร็จ'); }
   };
 
-  const updateSessions = async (next) => {
+  const updateSessions = async (next, deletedIds = []) => {
     setSessions(next);
     try {
-      const { data: old } = await supabase.from('tutor_sessions').select('id').eq('user_id', OWNER_ID);
-      const keep = new Set(next.map(x => x.id));
-      for (const row of old || []) if (!keep.has(row.id)) await supabase.from('tutor_sessions').delete().eq('id', row.id).eq('user_id', OWNER_ID);
+      for (const id of deletedIds) { const { error } = await supabase.from('tutor_sessions').delete().eq('id', id).eq('user_id', OWNER_ID); if (error) throw error; }
       if (next.length) await supabase.from('tutor_sessions').upsert(next.map(x => ({ id:x.id, user_id:OWNER_ID, student_id:x.studentId||null, student_name:x.studentName||'', session_date:x.date, hours:Number(x.hours), rate:Number(x.rate), note:x.note||'', invoiced:Boolean(x.invoiced), paid:Boolean(x.paid), source_slot_id:x.sourceSlotId||null })));
     } catch (e) { console.error(e); showToast('บันทึกคาบสอนไม่สำเร็จ'); }
   };
@@ -278,7 +270,7 @@ function EmptyState({ text }) {
 function ProgressIntelligence({ students, sessions }) {
   const rows = students.map(s => {
     const history=sessions.filter(x=>x.studentId===s.id).sort((a,b)=>a.date.localeCompare(b.date));
-    const scores=history.map(x=>Number((x.note||'').match(/คะแนน[:： ]*(\\d+(?:\\.\\d+)?)/)?.[1])).filter(Number.isFinite);
+    const scores=history.map(x=>Number((x.note||'').match(/คะแนน[:： ]*(\d+(?:\.\d+)?)/)?.[1])).filter(Number.isFinite);
     const current=s.latestScore!=='' ? Number(s.latestScore) : (scores.length?scores[scores.length-1]:null);
     const baseline=s.baselineScore!=='' ? Number(s.baselineScore) : (scores.length?scores[0]:null);
     const target=s.targetScore!=='' ? Number(s.targetScore) : null;
@@ -338,7 +330,7 @@ function SmartAlerts({ students, sessions, schedule }) {
     const last=history[0];
     if(s.status==='active' && !last) alerts.push({level:'info',text:s.name+' ยังไม่มีบันทึกคาบสอน'});
     if(last){
-      const days=daysBetween(last.date,today.toISOString().slice(0,10));
+      const days=daysBetween(last.date,todayStr());
       if(days>=21) alerts.push({level:'warn',text:s.name+' ไม่มีคาบสอน/บันทึกคาบมาแล้ว '+days+' วัน'});
     }
     if(s.latestScore!==''&&s.targetScore!==''&&Number(s.targetScore)-Number(s.latestScore)>=10)
@@ -582,7 +574,7 @@ function StudentsTab({ students, updateStudents, sessions }) {
     updateStudents(editing==='new'?[...students,student]:students.map(s=>s.id===editing?{...s,...student}:s));
     setEditing(null);
   };
-  const remove = (id) => { if(confirm('ลบนักเรียนคนนี้? ประวัติการสอนเดิมจะยังอยู่')) updateStudents(students.filter(s=>s.id!==id)); };
+  const remove = (id) => { if(confirm('ลบนักเรียนคนนี้? ประวัติการสอนเดิมจะยังอยู่')) updateStudents(students.filter(s=>s.id!==id), [id]); };
   const subjectOptions=['คณิตศาสตร์','ฟิสิกส์','ภาษาอังกฤษ','ภาษาจีน','วิทยาศาสตร์'];
   const buildAnalysis = (s) => {
     const history = sessions.filter(x=>x.studentId===s.id).sort((a,b)=>a.date.localeCompare(b.date));
@@ -676,7 +668,7 @@ function StudentsTab({ students, updateStudents, sessions }) {
       {typeof historyStudent === 'string' && historyStudent.startsWith('assistant:') && (() => {
         const student = students.find(s => s.id === historyStudent.slice(10));
         if (!student) return null;
-        return <TutorAssistant student={student} sessions={sessions} onClose={()=>setHistoryStudent(null)} onPlanner={()=>{setLessonDuration(90);setHistoryStudent('lesson:'+student.id)}} />;
+        return <TutorAssistant student={student} sessions={sessions} onClose={()=>setHistoryStudent(null)} onPlanner={()=>{setLessonDuration(90);setHistoryStudent('lesson:'+student.id)}} onWorksheet={()=>setHistoryStudent('worksheet:'+student.id)} />;
       })()}
 
       {typeof historyStudent === 'string' && historyStudent.startsWith('lesson:') && (() => {
@@ -764,7 +756,7 @@ function ParentReport({ student, sessions, onClose }) {
     ...nextSteps.map(x => `• ${x}`),
     '',
     'จะติดตามพัฒนาการต่อเนื่องในคาบถัดไปค่ะ'
-  ].filter(Boolean).join('\\n');
+  ].filter(Boolean).join('\n');
 
   const copy = async () => {
     try {
@@ -862,7 +854,7 @@ function WorksheetGenerator({ student, sessions, onClose }) {
 }
 
 // ---------- AI Tutor Assistant ----------
-function TutorAssistant({ student, sessions, onClose, onPlanner }) {
+function TutorAssistant({ student, sessions, onClose, onPlanner, onWorksheet }) {
   const history = sessions.filter(x=>x.studentId===student.id).sort((a,b)=>a.date.localeCompare(b.date));
   const subject = student.subjects?.[0] || 'วิชาหลัก';
   const weakness = student.weaknesses || 'จุดที่ยังไม่แม่นจากคาบก่อน';
@@ -944,7 +936,7 @@ function TutorAssistant({ student, sessions, onClose, onPlanner }) {
         <button onClick={onPlanner} style={{background:C.pine,color:C.paper}} className="w-full text-sm font-medium py-2.5 rounded-lg flex items-center justify-center gap-2">
           <ClipboardList size={16}/> สร้างแผนสอนคาบถัดไป
         </button>
-        <button onClick={()=>setHistoryStudent('worksheet:'+student.id)} style={{border:`1px solid ${C.line}`,color:C.inkSoft}} className="w-full text-sm font-medium py-2.5 rounded-lg flex items-center justify-center gap-2">
+        <button onClick={onWorksheet} style={{border:`1px solid ${C.line}`,color:C.inkSoft}} className="w-full text-sm font-medium py-2.5 rounded-lg flex items-center justify-center gap-2">
           <Brain size={16}/> สร้าง Worksheet
         </button>
       </div>
@@ -1066,7 +1058,7 @@ function ScheduleTab({ students, schedule, updateSchedule, sessions, updateSessi
 
   const removeSlot = (id) => {
     if (!confirm('ลบคาบนี้ออกจากตาราง?')) return;
-    updateSchedule(schedule.filter((s) => s.id !== id));
+    updateSchedule(schedule.filter((s) => s.id !== id), [id]);
   };
 
   const openConfirm = (slot, date) => {
@@ -1510,7 +1502,7 @@ function SessionsTab({ students, sessions, updateSessions, getStudent, showToast
   const togglePaid = (s) => updateSessions(sessions.map((x) => (x.id === s.id ? { ...x, paid: !x.paid } : x)));
   const remove = (id) => {
     if (!confirm('ลบคาบสอนนี้?')) return;
-    updateSessions(sessions.filter((s) => s.id !== id));
+    updateSessions(sessions.filter((s) => s.id !== id), [id]);
   };
 
   const preview = buildSmartNote();
@@ -1786,7 +1778,7 @@ function BusinessIntelligence({ students, sessions, schedule }) {
   const lastSix = Array.from({ length: 6 }, (_, i) => {
     const d = new Date(month + '-01T00:00:00');
     d.setMonth(d.getMonth() - (5 - i));
-    const key = d.toISOString().slice(0, 7);
+    const key = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
     const rows = sessions.filter(s => monthStr(s.date) === key);
     return { key, label: MONTHS_TH[d.getMonth()], amount: rows.reduce((sum,s)=>sum+Number(s.hours)*Number(s.rate),0) };
   });
