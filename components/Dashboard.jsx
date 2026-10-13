@@ -19,7 +19,7 @@ export default function Dashboard({students=[],schedule=[],sessions=[],exception
  const t=WORDS[lang]||WORDS.th;
  const today=dateKey(new Date()),month=monthKey(new Date());
  const model=useMemo(()=>buildMonthlyForecast({month,students,schedule,sessions,exceptions,today}),[month,students,schedule,sessions,exceptions,today]);
- const chart=useMemo(()=>buildNineMonthChart({month,students,schedule,sessions,exceptions,today}),[month,students,schedule,sessions,exceptions,today]);
+ const chart=useMemo(()=>buildNineMonthChart({month,students,schedule,sessions,exceptions,today,lang}),[month,students,schedule,sessions,exceptions,today]);
  const thisMonthSessions=sessions.filter(s=>s.date?.slice(0,7)===month);
  const earned=thisMonthSessions.reduce((sum,s)=>sum+Number(s.hours||0)*Number(s.rate||0),0);
  const expected=earned+model.forecast.reduce((sum,r)=>sum+r.amount,0);
