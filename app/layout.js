@@ -1,8 +1,8 @@
 import './globals.css';
 
 export const metadata = {
-  title: 'สมุดสอนพิเศษ',
-  description: 'จัดตาราง คิดค่าสอน แจ้งผู้ปกครอง',
+  title: 'Tutor Desk | สมุดบริหารงานติวเตอร์',
+  description: 'จัดการนักเรียน ตารางสอน ค่าสอน และติดตามการชำระเงิน',
 };
 
 export default function RootLayout({ children }) {
