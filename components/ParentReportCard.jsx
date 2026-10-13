@@ -178,7 +178,7 @@ export default function ParentReportCard({ student, sessions = [], month: initia
   if (!student) return null;
   return (
     <section className="w-full min-w-0 space-y-4 text-sm" style={{color:C.ink}}>
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3"><button type="button" onClick={onClose} className="rounded-lg border px-3 py-2 text-xs" style={{borderColor:C.line,color:C.ink}}>ปิดรายงาน</button>
         <div><h2 className="text-lg font-semibold">รายงานความก้าวหน้า · {student.name}</h2><p style={{color:C.inkSoft}} className="text-xs mt-1">การ์ดสำหรับส่งให้ผู้ปกครองทาง LINE</p></div>
         <label className="flex items-center gap-2 text-xs"><CalendarDays size={15}/><span>เดือนที่รายงาน</span><input aria-label="เดือนที่รายงาน" type="month" value={month} onChange={e=>setMonth(e.target.value)} className="max-w-[150px] rounded-lg border px-2 py-2" style={{borderColor:C.line,background:C.surface}} /></label>
       </div>
