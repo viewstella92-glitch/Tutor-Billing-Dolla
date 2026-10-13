@@ -680,7 +680,7 @@ function StudentsTab({ students, updateStudents, sessions }) {
       {typeof historyStudent === 'string' && historyStudent.startsWith('parent:') && (() => {
         const student = students.find(s => s.id === historyStudent.slice(7));
         if (!student) return null;
-        return <ParentReportCard student={student} sessions={sessions} />;
+        return <ParentReportCard student={student} sessions={sessions} onClose={()=>setHistoryStudent(null)} />;
       })()}
 
       {typeof historyStudent === 'string' && historyStudent.startsWith('worksheet:') && (() => {
