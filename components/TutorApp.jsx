@@ -211,21 +211,21 @@ export default function App() {
 
   const NAV = [
     { id: 'dashboard', label: lang==='en' ? 'Dashboard' : 'ภาพรวม', icon: LayoutDashboard },
-    { id: 'progress', label: 'พัฒนาการ', icon: TrendingUp },
-    { id: 'alerts', label: 'แจ้งเตือน', icon: Bell },
-    { id: 'business', label: 'ธุรกิจ', icon: BarChart },
-    { id: 'students', label: 'นักเรียน', icon: Users },
-    { id: 'schedule', label: 'ตารางสอน', icon: CalendarDays },
+    { id: 'progress', label: lang==='en' ? 'Progress' : 'พัฒนาการ', icon: TrendingUp },
+    { id: 'alerts', label: lang==='en' ? 'Alerts' : 'แจ้งเตือน', icon: Bell },
+    { id: 'business', label: lang==='en' ? 'Business' : 'ธุรกิจ', icon: BarChart },
+    { id: 'students', label: lang==='en' ? 'Students' : 'นักเรียน', icon: Users },
+    { id: 'schedule', label: lang==='en' ? 'Schedule' : 'ตารางสอน', icon: CalendarDays },
     { id: 'plan', label: lang==='en' ? 'Monthly plan' : 'แพลนรายเดือน', icon: CalendarDays },
-    { id: 'sessions', label: 'บันทึกคาบสอน', icon: ClipboardList },
+    { id: 'sessions', label: lang==='en' ? 'Lessons' : 'บันทึกคาบสอน', icon: ClipboardList },
     { id: 'invoice', label: lang==='en' ? 'Invoices' : 'แจ้งค่าสอน', icon: Receipt },
-    { id: 'export', label: 'ส่งออกข้อมูล', icon: Download },
+    { id: 'export', label: lang==='en' ? 'Export' : 'ส่งออกข้อมูล', icon: Download },
   ];
 
   if (!loaded) {
     return (
       <div style={{ background: C.paper, color: C.inkSoft }} className="w-full min-h-screen flex items-center justify-center text-sm">
-        กำลังโหลดข้อมูล...
+        {lang==='en'?'Loading data…':'กำลังโหลดข้อมูล...'}
       </div>
     );
   }
