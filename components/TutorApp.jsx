@@ -283,7 +283,7 @@ function ProgressIntelligence({ students, sessions }) {
   const chartStudentId = rows[0]?.id || '';
   const [selectedId, setSelectedId] = useState(chartStudentId);
   const selected = rows.find(x=>x.id===selectedId) || rows[0];
-  const chartData = selected ? sessions.filter(x=>x.studentId===selected.id).sort((a,b)=>a.date.localeCompare(b.date)).map((x,i)=>{ const m=(x.note||'').match(/คะแนน[:： ]*(\\d+(?:\\.\\d+)?)/); return m ? {date: x.date.slice(5), score:Number(m[1]), index:i+1} : null; }).filter(Boolean) : [];
+  const chartData = selected ? sessions.filter(x=>x.studentId===selected.id).sort((a,b)=>a.date.localeCompare(b.date)).map((x,i)=>{ const m=(x.note||'').match(/คะแนน[:： ]*(\d+(?:\\.\d+)?)/); return m ? {date: x.date.slice(5), score:Number(m[1]), index:i+1} : null; }).filter(Boolean) : [];
   return (
     <div className="space-y-4">
       <SectionTitle sub="ดูแนวโน้มคะแนนและนักเรียนที่ควรติดตาม">Progress Intelligence</SectionTitle>
@@ -337,7 +337,7 @@ function SmartAlerts({ students, sessions, schedule }) {
       alerts.push({level:'warn',text:s.name+' ยังห่างเป้าหมาย '+(Number(s.targetScore)-Number(s.latestScore))+' คะแนน'});
   });
   schedule.filter(x=>!x.recurring&&x.date).forEach(x=>{
-    const days=daysBetween(today.toISOString().slice(0,10),x.date);
+    const days=daysBetween(todayStr(),x.date);
     if(days<0) alerts.push({level:'warn',text:'มีตารางสอนที่ยังไม่ตรวจสอบผล: '+((students.find(s=>s.id===x.studentId)||{}).name||'นักเรียน')+' · '+fmtDateThai(x.date)});
   });
   return (
@@ -578,7 +578,7 @@ function StudentsTab({ students, updateStudents, sessions }) {
   const subjectOptions=['คณิตศาสตร์','ฟิสิกส์','ภาษาอังกฤษ','ภาษาจีน','วิทยาศาสตร์'];
   const buildAnalysis = (s) => {
     const history = sessions.filter(x=>x.studentId===s.id).sort((a,b)=>a.date.localeCompare(b.date));
-    const scores = history.map(x => Number((x.note||'').match(/คะแนน[:： ]*(\\d+(?:\\.\\d+)?)/)?.[1])).filter(Number.isFinite);
+    const scores = history.map(x => Number((x.note||'').match(/คะแนน[:： ]*(\d+(?:\\.\d+)?)/)?.[1])).filter(Number.isFinite);
     const current = s.latestScore !== '' ? Number(s.latestScore) : (scores.length ? scores[scores.length-1] : null);
     const baseline = s.baselineScore !== '' ? Number(s.baselineScore) : (scores.length ? scores[0] : null);
     const progress = current != null && baseline != null ? current-baseline : null;
@@ -718,7 +718,7 @@ function StudentsTab({ students, updateStudents, sessions }) {
 function ParentReport({ student, sessions, onClose }) {
   const history = sessions.filter(x => x.studentId === student.id).sort((a,b) => a.date.localeCompare(b.date));
   const scores = history.map(x => {
-    const m = (x.note || '').match(/คะแนน[:： ]*(\\d+(?:\\.\\d+)?)/);
+    const m = (x.note || '').match(/คะแนน[:： ]*(\d+(?:\\.\d+)?)/);
     return m ? Number(m[1]) : null;
   }).filter(Number.isFinite);
   const current = student.latestScore !== '' && student.latestScore != null ? Number(student.latestScore) : (scores.length ? scores[scores.length - 1] : null);
@@ -1812,12 +1812,13 @@ function ExportTab({ students, sessions }) {
 
   const download = () => {
     const header = ['วันที่', 'นักเรียน', 'ชั่วโมง', 'อัตรา/ชม.', 'ยอดเงิน', 'โน้ต', 'แจ้งแล้ว', 'จ่ายแล้ว'];
-    const lines = [header.join(',')];
+    const csvCell = (value) => '"' + String(value ?? '').replace(/"/g, '""') + '"';
+    const lines = [header.map(csvCell).join(',')];
     rows.forEach((s) => {
       const name = students.find((st) => st.id === s.studentId)?.name || s.studentName || '';
       const amount = s.hours * s.rate;
-      const cells = [s.date, name, s.hours, s.rate, amount, (s.note || '').replace(/,/g, ' '), s.invoiced ? 'ใช่' : 'ไม่', s.paid ? 'ใช่' : 'ไม่'];
-      lines.push(cells.join(','));
+      const cells = [s.date, name, s.hours, s.rate, amount, s.note || '', s.invoiced ? 'ใช่' : 'ไม่', s.paid ? 'ใช่' : 'ไม่'];
+      lines.push(cells.map(csvCell).join(','));
     });
     const csv = '\uFEFF' + lines.join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
