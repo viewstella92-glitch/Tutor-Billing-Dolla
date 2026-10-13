@@ -405,19 +405,42 @@ function Dashboard({ students, sessions, schedule, updateSessions, getStudent, s
     <div>
       <SectionTitle sub={fmtDateThai(today)}>ภาพรวม</SectionTitle>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
-        <Card>
-          <div style={{ color: C.inkSoft }} className="text-xs mb-1">รายได้เดือนนี้</div>
-          <div style={{ color: C.pine }} className="text-2xl font-semibold">{fmtMoney(revenueThisMonth)}</div>
+      <div style={{background:`linear-gradient(120deg, ${C.pineDark}, ${C.pine})`}} className="relative overflow-hidden rounded-2xl p-5 sm:p-6 mb-4 text-white">
+        <div className="relative z-10 max-w-xl">
+          <div className="text-xs uppercase tracking-widest opacity-80">Tutor workspace</div>
+          <h2 className="text-xl sm:text-2xl font-semibold mt-1">ภาพรวมการสอนของคุณ</h2>
+          <p className="text-sm mt-2 opacity-90">ติดตามรายได้ คาบสอน และยอดที่ต้องเก็บได้จากหน้าเดียว</p>
+          <div className="flex flex-wrap gap-2 mt-4">
+            <button onClick={() => setTab('students')} className="rounded-xl bg-white px-3 py-2 text-sm font-medium" style={{color:C.pineDark}}>＋ เพิ่ม/จัดการนักเรียน</button>
+            <button onClick={() => setTab('schedule')} className="rounded-xl px-3 py-2 text-sm font-medium" style={{background:'rgba(255,255,255,.15)',color:'#fff',border:'1px solid rgba(255,255,255,.3)'}}>ดูตารางสอน →</button>
+            <button onClick={() => setTab('invoice')} className="rounded-xl px-3 py-2 text-sm font-medium" style={{background:'rgba(255,255,255,.15)',color:'#fff',border:'1px solid rgba(255,255,255,.3)'}}>แจ้งค่าสอน →</button>
+          </div>
+        </div>
+        <div aria-hidden="true" className="absolute -right-5 -bottom-16 h-48 w-48 rounded-full border-[28px] opacity-10" style={{borderColor:'#fff'}} />
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+        <Card style={{background:C.pineTint,borderColor:C.pineTint}}>
+          <div className="flex items-center justify-between gap-2"><div style={{color:C.pineDark}} className="text-xs font-medium">รายได้เดือนนี้</div><span className="text-lg">฿</span></div>
+          <div style={{color:C.pineDark}} className="text-2xl sm:text-3xl font-semibold mt-2">{fmtMoney(revenueThisMonth)}</div>
+          <div className="text-xs mt-2" style={{color:C.inkSoft}}>{sessionsThisMonth.length} คาบที่บันทึกแล้ว</div>
         </Card>
-        <Card>
-          <div style={{ color: C.inkSoft }} className="text-xs mb-1">ชั่วโมงสอนเดือนนี้</div>
-          <div className="text-2xl font-semibold">{fmtHours(hoursThisMonth)} ชม.</div>
+        <Card style={{background:'#F0F7FC',borderColor:'#D8EAF5'}}>
+          <div className="flex items-center justify-between gap-2"><div style={{color:'#365F79'}} className="text-xs font-medium">ชั่วโมงสอนเดือนนี้</div><span className="text-lg">◷</span></div>
+          <div className="text-2xl sm:text-3xl font-semibold mt-2">{fmtHours(hoursThisMonth)} <span className="text-base font-normal">ชม.</span></div>
+          <div className="text-xs mt-2" style={{color:C.inkSoft}}>เฉลี่ย {sessionsThisMonth.length ? fmtHours(hoursThisMonth/sessionsThisMonth.length) : '0'} ชม./คาบ</div>
         </Card>
-        <Card style={outstandingTotal > 0 ? { borderColor: C.brick } : {}}>
-          <div style={{ color: C.inkSoft }} className="text-xs mb-1">ค้างชำระทั้งหมด</div>
-          <div style={{ color: outstandingTotal > 0 ? C.brick : C.ink }} className="text-2xl font-semibold">{fmtMoney(outstandingTotal)}</div>
+        <Card style={outstandingTotal > 0 ? {background:C.brickTint,borderColor:C.brick} : {background:C.surface,borderColor:C.line}}>
+          <div className="flex items-center justify-between gap-2"><div style={{color:outstandingTotal>0?C.brick:C.inkSoft}} className="text-xs font-medium">ค้างชำระทั้งหมด</div><span className="text-lg">◉</span></div>
+          <div style={{color:outstandingTotal > 0 ? C.brick : C.ink}} className="text-2xl sm:text-3xl font-semibold mt-2">{fmtMoney(outstandingTotal)}</div>
+          <div className="text-xs mt-2" style={{color:C.inkSoft}}>{unpaid.length} คาบที่ยังไม่ชำระ</div>
         </Card>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-6">
+        <button onClick={() => setTab('students')} className="rounded-xl border p-3 text-left transition hover:-translate-y-0.5" style={{borderColor:C.line,background:C.surface}}><div className="text-lg">👩‍🎓</div><div className="text-sm font-medium mt-1">นักเรียน</div><div className="text-xs mt-1" style={{color:C.inkSoft}}>{students.length} คนในระบบ</div></button>
+        <button onClick={() => setTab('schedule')} className="rounded-xl border p-3 text-left transition hover:-translate-y-0.5" style={{borderColor:C.line,background:C.surface}}><div className="text-lg">🗓️</div><div className="text-sm font-medium mt-1">ตารางสอน</div><div className="text-xs mt-1" style={{color:C.inkSoft}}>{todaysSlots.length} คาบวันนี้</div></button>
+        <button onClick={() => setTab('invoice')} className="rounded-xl border p-3 text-left transition hover:-translate-y-0.5" style={{borderColor:C.line,background:C.surface}}><div className="text-lg">🧾</div><div className="text-sm font-medium mt-1">แจ้งค่าสอน</div><div className="text-xs mt-1" style={{color:C.inkSoft}}>{uninvoicedCount} คาบรอแจ้ง</div></button>
+        <div className="rounded-xl border p-3" style={{borderColor:C.line,background:C.surface}}><div className="text-lg">📊</div><div className="text-sm font-medium mt-1">รายได้ปีนี้</div><div className="text-xs mt-1" style={{color:C.inkSoft}}>{fmtMoney(sessions.filter(s=>s.date.startsWith(String(new Date().getFullYear()))).reduce((sum,s)=>sum+s.hours*s.rate,0))}</div></div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
