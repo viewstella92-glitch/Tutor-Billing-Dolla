@@ -119,44 +119,130 @@ export default function ParentReportCard({ student, sessions = [], month: initia
   const drawCard = () => {
     const canvas = canvasRef.current;
     if (!canvas || !student) return canvas;
-    const width = 720, pad = 32, contentW = width-pad*2;
-    const lines = [];
+    const width = 720, PAD = 32, INNER = width - PAD * 2, scale = 2;
     const ctx = canvas.getContext('2d');
-    const scale = 2;
-    ctx.font = '400 16px sans-serif';
-    const addWrapped = (text, max=contentW) => wrapText(ctx, text, max).forEach(line=>lines.push(line));
-    addWrapped('รายงานความก้าวหน้าการเรียน · ' + monthLabelOf(month));
-    addWrapped(student.name || 'นักเรียน');
-    addWrapped([student.grade, ...(student.subjects||[])].filter(Boolean).join(' · ') || 'บันทึกการเรียนรู้รายบุคคล');
-    lines.push(''); lines.push('พัฒนาการคะแนน');
-    addWrapped(current !== null ? 'คะแนนตั้งต้น ' + (baseline ?? '—') + '  ·  คะแนนล่าสุด ' + current + '  ·  เป้าหมาย ' + (target ?? '—') : 'ยังไม่มีคะแนนที่บันทึกไว้ เราจะค่อย ๆ เก็บข้อมูลพัฒนาการไปด้วยกัน');
-    if (change !== null && change > 0) addWrapped('ขึ้นมา +' + change + ' จากตอนเริ่มเรียน');
-    lines.push(''); lines.push('ทักษะที่กำลังเรียน');
-    skills.forEach(x=>addWrapped(x.status + ' · ' + x.label));
-    if (!skills.length) addWrapped('กำลังเก็บข้อมูลหัวข้อที่เรียน เพื่อสะท้อนพัฒนาการของน้องให้ชัดเจนขึ้น');
-    lines.push(''); lines.push('คาบเรียนล่าสุดในเดือนนี้');
-    parsedRecent.forEach(s=>{ addWrapped(fmtDateThai(s.date) + ' · ' + (s.parsed.taught || 'ไม่ได้ระบุเรื่องที่สอน')); if(s.parsed.outcome) addWrapped('ผลการเรียน: ' + s.parsed.outcome); });
-    if (!parsedRecent.length) addWrapped('เดือนนี้ยังไม่มีคาบสอนที่บันทึกไว้');
-    lines.push(''); lines.push('ข้อความจากติวเตอร์'); addWrapped(tutorMessage || 'วันนี้น้องทำได้ดีขึ้นค่ะ');
-    if (homeworkItems.length) { lines.push(''); lines.push('การบ้านและคาบหน้า'); homeworkItems.forEach((x,i)=>addWrapped((i+1)+'. '+x)); }
-    lines.push(''); lines.push('ยอดของเดือนนี้ · ' + fmtHours(monthHours) + ' ชั่วโมง · ' + fmtMoney(monthTotal));
-    const lineH = 25, headerH = 150, height = headerH + lines.length*lineH + 45;
-    canvas.width=width*scale; canvas.height=height*scale; canvas.style.width='100%'; canvas.style.height='auto'; canvas.style.aspectRatio=width+'/'+height;
-    ctx.setTransform(scale,0,0,scale,0,0);
-    roundRectPath(ctx,0,0,width,height,22); ctx.fillStyle=C.surface; ctx.fill(); ctx.strokeStyle=C.line; ctx.lineWidth=1; ctx.stroke();
-    ctx.save(); roundRectPath(ctx,0,0,width,headerH,{tl:22,tr:22,br:0,bl:0}); ctx.clip(); ctx.fillStyle=C.pine; ctx.fillRect(0,0,width,headerH); ctx.restore();
-    ctx.fillStyle='rgba(255,255,255,.8)'; ctx.font='600 14px sans-serif'; ctx.fillText('รายงานสำหรับผู้ปกครอง',pad,32);
-    ctx.fillStyle='#FFFFFF'; ctx.font='700 30px sans-serif'; ctx.fillText(student.name || 'นักเรียน',pad,72);
-    ctx.font='400 16px sans-serif'; ctx.fillText([student.grade,...(student.subjects||[])].filter(Boolean).join(' · ').slice(0,58),pad,103);
-    ctx.fillStyle='#FFFFFF'; ctx.font='600 14px sans-serif'; ctx.fillText(monthLabelOf(month),pad,130);
-    let y=headerH+28;
-    lines.forEach(line=>{
-      if(!line) { y+=8; return; }
-      const isHeading = ['พัฒนาการคะแนน','ทักษะที่กำลังเรียน','คาบเรียนล่าสุดในเดือนนี้','ข้อความจากติวเตอร์','การบ้านและคาบหน้า'].includes(line) || line.startsWith('ยอดของเดือนนี้');
-      ctx.font=isHeading?'700 17px sans-serif':'400 15px sans-serif'; ctx.fillStyle=isHeading?C.pineDark:C.ink;
-      ctx.fillText(line.slice(0,90),pad,y); y+=lineH;
+    const font = (value) => { ctx.font = value; };
+    const text = (value, x, y, face, color) => {
+      font(face); ctx.fillStyle = color; ctx.fillText(value, x, y);
+    };
+    const fillBox = (x, y, w, h, r, color) => {
+      roundRectPath(ctx, x, y, w, h, r); ctx.fillStyle = color; ctx.fill();
+    };
+    const strokeBox = (x, y, w, h, r, color) => {
+      roundRectPath(ctx, x, y, w, h, r); ctx.strokeStyle = color; ctx.lineWidth = 1; ctx.stroke();
+    };
+    const wrapLines = (context, value, maxWidth) => {
+      const result = [];
+      const paragraphs = String(value || '').split(/\\n/);
+      paragraphs.forEach(paragraph => {
+        if (!paragraph) { result.push(''); return; }
+        let line = '';
+        for (const char of Array.from(paragraph)) {
+          const candidate = line + char;
+          if (context.measureText(candidate).width > maxWidth && line) {
+            result.push(line); line = char;
+          } else line = candidate;
+        }
+        if (line) result.push(line);
+      });
+      return result.length ? result : [''];
+    };
+    const addText = (value, x, y, maxWidth, face, color, lh) => {
+      font(face);
+      const wrapped = wrapLines(ctx, value, maxWidth);
+      wrapped.forEach((line, i) => text(line, x, y + i * lh, face, color));
+      return wrapped.length * lh;
+    };
+    const lessons = parsedRecent;
+    const headerH = 150;
+    const layout = [];
+    let contentHeight = 22;
+    const addSectionTitle = (title) => {
+      layout.push({ type:'title', title, y:contentHeight });
+      contentHeight += 30;
+    };
+    const addParagraph = (value, options = {}) => {
+      const face = options.font || '400 15px sans-serif';
+      const lh = options.lh || 21;
+      font(face);
+      const wrapped = wrapLines(ctx, value, INNER);
+      layout.push({ type:'paragraph', value, lines:wrapped, y:contentHeight, font:face, color:options.color || C.ink, lh });
+      contentHeight += wrapped.length * lh + 4;
+    };
+    addSectionTitle('พัฒนาการคะแนน');
+    addParagraph(current !== null
+      ? 'คะแนนตั้งต้น ' + (baseline ?? '—') + '  ·  คะแนนล่าสุด ' + current + '  ·  เป้าหมาย ' + (target ?? '—')
+      : 'ยังไม่มีคะแนนที่บันทึกไว้ เราจะค่อย ๆ เก็บข้อมูลพัฒนาการไปด้วยกัน');
+    if (change !== null && change > 0) addParagraph('พัฒนาการเพิ่มขึ้น +' + change + ' คะแนนจากตอนเริ่มเรียน', {font:'600 14px sans-serif',color:C.pine});
+    addSectionTitle('ทักษะที่กำลังเรียน');
+    if (skills.length) skills.forEach(item => addParagraph(item.status + ' · ' + item.label, {font:'400 14px sans-serif',lh:19}));
+    else addParagraph('กำลังเก็บข้อมูลหัวข้อที่เรียน เพื่อสะท้อนพัฒนาการของน้องให้ชัดเจนขึ้น');
+    addSectionTitle('คาบเรียนล่าสุดในเดือนนี้');
+    if (lessons.length) {
+      lessons.forEach((lesson) => {
+        const parsed = lesson.parsed;
+        const IX = PAD + 18;
+        const IW = INNER - 36;
+        const subject = lesson.subject || (student?.subjects || []).join(' · ') || 'คาบเรียน';
+        const items = [
+          { text: fmtDateThai(lesson.date) + ' · ' + fmtHours(lesson.hours) + ' ชั่วโมง · ' + subject, font:'600 12px sans-serif', color:C.pine, lh:16 },
+          { text: parsed.taught || 'ไม่ได้ระบุหัวข้อที่สอน', font:'600 14px sans-serif', color:C.ink, lh:19 },
+          parsed.outcome && { text:'ผลการเรียน: ' + parsed.outcome, font:'400 13px sans-serif', color:C.ink, lh:18 },
+          parsed.stuck && { text:'ยังติด: ' + parsed.stuck, font:'400 12px sans-serif', color:C.gold, lh:17 },
+          parsed.homework && { text:'การบ้าน: ' + parsed.homework, font:'400 12px sans-serif', color:C.pine, lh:17 },
+        ].filter(Boolean);
+        let bodyH = 0;
+        const measured = items.map(item => {
+          font(item.font);
+          const lines = wrapLines(ctx, item.text, IW);
+          bodyH += lines.length * item.lh + 4;
+          return { ...item, lines };
+        });
+        const cardH = bodyH + 16;
+        layout.push({type:'lesson', y:contentHeight, h:cardH, measured, IX, IW, color:lesson.color || C.pine});
+        contentHeight += cardH + 8;
+      });
+    } else addParagraph('เดือนนี้ยังไม่มีคาบสอนที่บันทึกไว้');
+    addSectionTitle('ข้อความจากติวเตอร์');
+    addParagraph(tutorMessage || 'วันนี้น้องทำได้ดีขึ้นค่ะ');
+    if (homeworkItems.length) {
+      addSectionTitle('การบ้านและคาบหน้า');
+      homeworkItems.forEach((item, index) => addParagraph((index + 1) + '. ' + item));
+    }
+    const totalLabel = 'ยอดของเดือนนี้ · ' + fmtHours(monthHours) + ' ชั่วโมง · ' + fmtMoney(monthTotal);
+    contentHeight += 20;
+    const height = headerH + contentHeight + 30;
+    canvas.width = width * scale; canvas.height = height * scale;
+    canvas.style.width = '100%'; canvas.style.height = 'auto'; canvas.style.aspectRatio = width + '/' + height;
+    ctx.setTransform(scale, 0, 0, scale, 0, 0);
+    fillBox(0, 0, width, height, 22, C.surface);
+    strokeBox(0, 0, width, height, 22, C.line);
+    ctx.save(); roundRectPath(ctx, 0, 0, width, headerH, {tl:22,tr:22,br:0,bl:0}); ctx.clip();
+    ctx.fillStyle = C.pine; ctx.fillRect(0, 0, width, headerH); ctx.restore();
+    text('รายงานสำหรับผู้ปกครอง', PAD, 32, '600 14px sans-serif', 'rgba(255,255,255,.85)');
+    text(student.name || 'นักเรียน', PAD, 72, '700 30px sans-serif', '#FFFFFF');
+    text([student.grade, ...(student.subjects || [])].filter(Boolean).join(' · ').slice(0, 58), PAD, 103, '400 16px sans-serif', '#FFFFFF');
+    text(monthLabelOf(month), PAD, 130, '600 14px sans-serif', '#FFFFFF');
+    layout.forEach(item => {
+      const y = headerH + item.y;
+      if (item.type === 'title') {
+        text(item.title, PAD, y + 16, '700 17px sans-serif', C.pineDark);
+      } else if (item.type === 'paragraph') {
+        item.lines.forEach((line, i) => text(line, PAD, y + 15 + i * item.lh, item.font, item.color));
+      } else if (item.type === 'lesson') {
+        fillBox(PAD, y, INNER, item.h, 12, C.surface);
+        strokeBox(PAD, y, INNER, item.h, 12, C.line);
+        fillBox(PAD + 2, y + 10, 4, Math.max(8, item.h - 20), 2, item.color);
+        let iy = y + 10;
+        item.measured.forEach(entry => {
+          entry.lines.forEach((line, i) => text(line, item.IX, iy + i * entry.lh, entry.font, entry.color));
+          iy += entry.lines.length * entry.lh + 4;
+        });
+      }
     });
-    ctx.strokeStyle=C.line; ctx.setLineDash([5,4]); ctx.beginPath(); ctx.moveTo(pad,y+4); ctx.lineTo(width-pad,y+4); ctx.stroke(); ctx.setLineDash([]);
+    const footerY = height - 18;
+    ctx.strokeStyle = C.line; ctx.setLineDash([5, 4]); ctx.beginPath(); ctx.moveTo(PAD, footerY - 22); ctx.lineTo(width - PAD, footerY - 22); ctx.stroke(); ctx.setLineDash([]);
+    text(totalLabel, PAD, footerY, '700 17px sans-serif', C.pineDark);
     return canvas;
   };
   const getPngBlob = async () => {
