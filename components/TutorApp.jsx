@@ -3,8 +3,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import ParentReportCard from './ParentReportCard';
-import InvoiceCard from './InvoiceCard';
-import WeeklyPlanner from './WeeklyPlanner';
+import InvoiceCard, { T as INVOICE_T } from './InvoiceCard';
+import MonthlyPlanner from './MonthlyPlanner';
+import SettingsPanel from './SettingsPanel';
+import { OWNER_ID as FORECAST_OWNER_ID } from '../lib/forecast';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import {
   LayoutDashboard, Users, CalendarDays, ClipboardList, Receipt, Download,
@@ -53,8 +55,13 @@ export default function App() {
   const [sessions, setSessions] = useState([]);
   const [loaded, setLoaded] = useState(false);
   const [toast, setToast] = useState('');
+  const [exceptions, setExceptions] = useState([]);
+  const [invoices, setInvoices] = useState([]);
+  const [settings, setSettings] = useState({ display_name:'', payment_note:'', qr_data_url:null });
+  const [lang, setLang] = useState(() => typeof window !== 'undefined' && window.localStorage.getItem('tutor-app:lang') === 'en' ? 'en' : 'th');
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
-  const OWNER_ID = '7d7c0b4e-9f42-4a93-b8b4-7f5a7d6c1e21';
+  const OWNER_ID = FORECAST_OWNER_ID;
 
   useEffect(() => {
     const load = async () => {
@@ -99,14 +106,26 @@ export default function App() {
           localStorage.removeItem('tutor-app:sessions');
         }
 
-        const [a,b,c] = await Promise.all([
+        const [a,b,c,d,e,f] = await Promise.all([
           supabase.from('tutor_students').select('*').eq('user_id', OWNER_ID).order('created_at'),
           supabase.from('tutor_schedule').select('*').eq('user_id', OWNER_ID),
           supabase.from('tutor_sessions').select('*').eq('user_id', OWNER_ID).order('session_date', { ascending: false }),
+          supabase.from('tutor_slot_exceptions').select('*').eq('user_id', OWNER_ID).order('date'),
+          supabase.from('tutor_invoices').select('*').eq('user_id', OWNER_ID).order('created_at', { ascending: false }),
+          supabase.from('tutor_settings').select('*').eq('user_id', OWNER_ID).maybeSingle(),
         ]);
+        if (a.error) throw a.error;
+        if (b.error) throw b.error;
+        if (c.error) throw c.error;
+        if (d.error) throw d.error;
+        if (e.error) throw e.error;
+        if (f.error) throw f.error;
         setStudents((a.data || []).map((x) => ({ id:x.id, name:x.name, rate:Number(x.rate), grade:x.grade||'', subjects:Array.isArray(x.subjects)?x.subjects:[], goals:x.goals||'', strengths:x.strengths||'', weaknesses:x.weaknesses||'', learningStyle:x.learning_style||'', notes:x.notes||'', status:x.status||'active', targetExam:x.target_exam||'', targetDate:x.target_date||'', baselineScore:x.baseline_score==null?'':Number(x.baseline_score), latestScore:x.latest_score==null?'':Number(x.latest_score), targetScore:x.target_score==null?'':Number(x.target_score) })));
         setSchedule((b.data || []).map((x) => ({ id:x.id, studentId:x.student_id, recurring:x.recurring, day:x.day ?? undefined, date:x.date ?? undefined, start:String(x.start_time).slice(0,5), end:String(x.end_time).slice(0,5) })));
         setSessions((c.data || []).map((x) => ({ id:x.id, studentId:x.student_id, studentName:x.student_name || '', date:x.session_date, hours:Number(x.hours), rate:Number(x.rate), note:x.note || '', invoiced:Boolean(x.invoiced), paid:Boolean(x.paid), sourceSlotId:x.source_slot_id || undefined })));
+        setExceptions((d.data || []).map((x) => ({ id:x.id, slotId:x.slot_id, date:x.date, status:x.status })));
+        setInvoices(e.data || []);
+        setSettings(f.data ? { display_name:f.data.display_name||'', payment_note:f.data.payment_note||'', qr_data_url:f.data.qr_data_url||null, updated_at:f.data.updated_at } : { display_name:'', payment_note:'', qr_data_url:null });
       } catch (e) {
         console.error(e);
         showToast('เชื่อมต่อฐานข้อมูลไม่สำเร็จ');
@@ -117,7 +136,51 @@ export default function App() {
     load();
   }, []);
 
+  useEffect(() => { try { window.localStorage.setItem('tutor-app:lang', lang); } catch {} }, [lang]);
+
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 2200); };
+
+  const updateExceptions = async (next, deletedIds = []) => {
+    setExceptions(next);
+    try {
+      for (const id of deletedIds) {
+        const { error } = await supabase.from('tutor_slot_exceptions').delete().eq('id', id).eq('user_id', OWNER_ID);
+        if (error) throw error;
+      }
+      if (next.length) {
+        const { error } = await supabase.from('tutor_slot_exceptions').upsert(next.map(x => ({ id:x.id, user_id:OWNER_ID, slot_id:x.slotId, date:x.date, status:x.status || 'cancelled' })), { onConflict:'id' });
+        if (error) throw error;
+      }
+    } catch (e) { console.error(e); showToast(lang==='en'?'Could not save cancellation':'บันทึกสถานะยกเลิกไม่สำเร็จ'); }
+  };
+
+  const saveSettings = async (next) => {
+    const row = { user_id:OWNER_ID, display_name:next.display_name||'', payment_note:next.payment_note||'', qr_data_url:next.qr_data_url||null, updated_at:new Date().toISOString() };
+    const { data, error } = await supabase.from('tutor_settings').upsert(row, { onConflict:'user_id' }).select('*').single();
+    if (error) throw error;
+    setSettings({ display_name:data.display_name||'', payment_note:data.payment_note||'', qr_data_url:data.qr_data_url||null, updated_at:data.updated_at });
+  };
+
+  const createInvoice = async ({ student, dateFrom, dateTo, selectedSessions, parentName }) => {
+    const ids = selectedSessions.map(s=>s.id);
+    const total = selectedSessions.reduce((sum,s)=>sum+Number(s.hours||0)*Number(s.rate||0),0);
+    const { data, error } = await supabase.rpc('create_tutor_invoice', {
+      p_student_id:student.id, p_period_from:dateFrom, p_period_to:dateTo,
+      p_session_ids:ids, p_total:total, p_student_name:student.name, p_parent_name:parentName||''
+    });
+    if (error) throw error;
+    const invoice = Array.isArray(data) ? data[0] : data;
+    if (!invoice?.id) throw new Error('Invoice was not returned by database');
+    const [sessionResult, invoiceResult] = await Promise.all([
+      supabase.from('tutor_sessions').select('*').eq('user_id',OWNER_ID).order('session_date',{ascending:false}),
+      supabase.from('tutor_invoices').select('*').eq('user_id',OWNER_ID).order('created_at',{ascending:false})
+    ]);
+    if (sessionResult.error) throw sessionResult.error;
+    if (invoiceResult.error) throw invoiceResult.error;
+    setSessions((sessionResult.data||[]).map(x=>({id:x.id,studentId:x.student_id,studentName:x.student_name||'',date:x.session_date,hours:Number(x.hours),rate:Number(x.rate),note:x.note||'',invoiced:Boolean(x.invoiced),paid:Boolean(x.paid),sourceSlotId:x.source_slot_id||undefined})));
+    setInvoices(invoiceResult.data||[]);
+    return invoice;
+  };
 
   const updateStudents = async (next, deletedIds = []) => {
     setStudents(next);
@@ -146,15 +209,15 @@ export default function App() {
   const getStudent = (id) => students.find((s) => s.id === id);
 
   const NAV = [
-    { id: 'dashboard', label: 'ภาพรวม', icon: LayoutDashboard },
+    { id: 'dashboard', label: lang==='en' ? 'Dashboard' : 'ภาพรวม', icon: LayoutDashboard },
     { id: 'progress', label: 'พัฒนาการ', icon: TrendingUp },
     { id: 'alerts', label: 'แจ้งเตือน', icon: Bell },
     { id: 'business', label: 'ธุรกิจ', icon: BarChart },
     { id: 'students', label: 'นักเรียน', icon: Users },
     { id: 'schedule', label: 'ตารางสอน', icon: CalendarDays },
-    { id: 'plan', label: 'แพลนสัปดาห์', icon: CalendarDays },
+    { id: 'plan', label: lang==='en' ? 'Monthly plan' : 'แพลนรายเดือน', icon: CalendarDays },
     { id: 'sessions', label: 'บันทึกคาบสอน', icon: ClipboardList },
-    { id: 'invoice', label: 'แจ้งค่าสอน', icon: Receipt },
+    { id: 'invoice', label: lang==='en' ? 'Invoices' : 'แจ้งค่าสอน', icon: Receipt },
     { id: 'export', label: 'ส่งออกข้อมูล', icon: Download },
   ];
 
@@ -214,7 +277,14 @@ export default function App() {
         </div>
       </div>
 
-      <div className="flex-1 px-4 py-6 md:px-10 md:py-10 max-w-4xl mx-auto w-full">
+      <div className="flex-1 px-4 py-4 md:px-10 md:py-6 max-w-5xl mx-auto w-full">
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3 border-b pb-4" style={{borderColor:C.line}}>
+          <div><div className="font-semibold" style={{color:C.pineDark}}>Tutor Billing Dolla</div><div className="text-xs mt-0.5" style={{color:C.inkSoft}}>{lang==='en'?'Tutoring and invoice workspace':'จัดการคาบสอนและใบแจ้งค่าสอน'}</div></div>
+          <div className="flex items-center gap-2">
+            <div className="inline-flex rounded-lg border p-1" style={{borderColor:C.line,background:C.surface}}><button type="button" onClick={()=>setLang('th')} className="rounded-md px-3 py-1.5 text-xs font-semibold" style={{background:lang==='th'?C.pine:C.surface,color:lang==='th'?'#fff':C.inkSoft}}>TH</button><button type="button" onClick={()=>setLang('en')} className="rounded-md px-3 py-1.5 text-xs font-semibold" style={{background:lang==='en'?C.pine:C.surface,color:lang==='en'?'#fff':C.inkSoft}}>EN</button></div>
+            <button type="button" onClick={()=>setSettingsOpen(true)} className="rounded-lg border px-3 py-2 text-sm font-medium" style={{borderColor:C.line,background:C.surface}}>{lang==='en'?'Settings':'ตั้งค่า'}</button>
+          </div>
+        </div>
         {tab === 'dashboard' && (
           <Dashboard students={students} sessions={sessions} schedule={schedule} updateSessions={updateSessions} getStudent={getStudent} showToast={showToast} setTab={setTab} onOpenLessonForm={(slot, date) => { setRecordRequest({ slot, date }); setTab('sessions'); }} />
         )}
@@ -222,7 +292,7 @@ export default function App() {
         {tab === 'progress' && <ProgressIntelligence students={students} sessions={sessions} />}
         {tab === 'alerts' && <SmartAlerts students={students} sessions={sessions} schedule={schedule} />}
         {tab === 'business' && <BusinessIntelligence students={students} sessions={sessions} schedule={schedule} />}
-        {tab === 'plan' && <WeeklyPlanner students={students} schedule={schedule} sessions={sessions} showToast={showToast} onOpenLessonForm={(slot, date) => { setRecordRequest({ slot, date }); setTab('sessions'); }} />}
+        {tab === 'plan' && <MonthlyPlanner students={students} schedule={schedule} sessions={sessions} exceptions={exceptions} updateExceptions={updateExceptions} showToast={showToast} lang={lang} setTab={setTab} onOpenLessonForm={(slot, date) => { setRecordRequest({ slot, date }); setTab('sessions'); }} />}
         {tab === 'schedule' && (
           <ScheduleTab students={students} schedule={schedule} updateSchedule={updateSchedule} sessions={sessions} updateSessions={updateSessions} getStudent={getStudent} showToast={showToast} onOpenLessonForm={(slot, date) => { setRecordRequest({ slot, date }); setTab('sessions'); }} />
         )}
@@ -230,11 +300,12 @@ export default function App() {
           <SessionsTab students={students} sessions={sessions} updateSessions={updateSessions} getStudent={getStudent} showToast={showToast} recordRequest={recordRequest} clearRecordRequest={() => setRecordRequest(null)} />
         )}
         {tab === 'invoice' && (
-          <InvoiceTab students={students} sessions={sessions} updateSessions={updateSessions} showToast={showToast} />
+          <InvoiceTab students={students} sessions={sessions} invoices={invoices} settings={settings} lang={lang} onCreateInvoice={createInvoice} showToast={showToast} />
         )}
         {tab === 'export' && <ExportTab students={students} sessions={sessions} />}
       </div>
 
+      {settingsOpen && <SettingsPanel settings={settings} lang={lang} onSave={saveSettings} showToast={showToast} onClose={()=>setSettingsOpen(false)} />}
       {toast && (
         <div style={{ background: C.ink, color: C.paper }} className="fixed bottom-5 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg text-sm shadow-lg z-50">
           {toast}
@@ -1476,73 +1547,68 @@ function SessionsTab({ students, sessions, updateSessions, getStudent, showToast
 }
 
 // ---------- Invoice / message generator ----------
-function InvoiceTab({ students, sessions, updateSessions, showToast }) {
-  const firstOfMonth = todayStr().slice(0, 8) + '01';
-  const [studentId, setStudentId] = useState(students[0]?.id || '');
-  const [dateFrom, setDateFrom] = useState(firstOfMonth);
-  const [dateTo, setDateTo] = useState(todayStr());
-  const [selected, setSelected] = useState(new Set());
-
-  const candidates = sessions
-    .filter((s) => s.studentId === studentId && s.date >= dateFrom && s.date <= dateTo && !s.invoiced)
-    .sort((a, b) => a.date.localeCompare(b.date));
-
-  useEffect(() => {
-    setSelected(new Set(candidates.map((c) => c.id)));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [studentId, dateFrom, dateTo, sessions.length]);
-
-  const student = students.find((s) => s.id === studentId);
-  const chosen = candidates.filter((c) => selected.has(c.id));
-  const toggle = (id) => {
-    setSelected(prev => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
+function InvoiceTab({ students, sessions, invoices=[], settings={}, lang='th', onCreateInvoice, showToast }) {
+  const words = INVOICE_T[lang] || INVOICE_T.th;
+  const firstOfMonth = todayStr().slice(0,8)+'01';
+  const [studentId,setStudentId] = useState(students[0]?.id||'');
+  const [dateFrom,setDateFrom] = useState(firstOfMonth);
+  const [dateTo,setDateTo] = useState(todayStr());
+  const [parentName,setParentName] = useState('');
+  const [selected,setSelected] = useState(new Set());
+  const [selectedInvoiceId,setSelectedInvoiceId] = useState('');
+  const [creating,setCreating] = useState(false);
+  const student = students.find(s=>s.id===studentId);
+  const invoiceForSession = new Map();
+  invoices.forEach(inv=>(inv.session_ids||[]).forEach(id=>invoiceForSession.set(id,inv)));
+  const inRange = sessions.filter(s=>s.studentId===studentId&&s.date>=dateFrom&&s.date<=dateTo).sort((a,b)=>a.date.localeCompare(b.date));
+  const candidates = inRange.filter(s=>!s.invoiced&&!invoiceForSession.has(s.id));
+  useEffect(()=>{setSelected(new Set(candidates.map(s=>s.id)));setSelectedInvoiceId('');},[studentId,dateFrom,dateTo,sessions.length,invoices.length]);
+  const chosen = candidates.filter(s=>selected.has(s.id));
+  const openedInvoice = invoices.find(i=>i.id===selectedInvoiceId);
+  const invoiceSessions = openedInvoice ? (openedInvoice.session_ids||[]).map(id=>sessions.find(s=>s.id===id)).filter(Boolean) : [];
+  const toggle=id=>setSelected(prev=>{const next=new Set(prev);if(next.has(id))next.delete(id);else next.add(id);return next;});
+  const create=async()=>{
+    if(!student||!chosen.length)return;
+    setCreating(true);
+    try{
+      const invoice=await onCreateInvoice({student,dateFrom,dateTo,selectedSessions:chosen,parentName});
+      setSelectedInvoiceId(invoice.id);
+      setParentName('');
+      showToast(lang==='en'?'Invoice created':'สร้างใบแจ้งค่าสอนแล้ว');
+    }catch(e){console.error(e);showToast(e?.message?.includes('already belong')?(lang==='en'?'A selected lesson is already invoiced':'มีคาบที่อยู่ในใบแจ้งค่าสอนแล้ว'):lang==='en'?'Could not create invoice':'สร้างใบแจ้งค่าสอนไม่สำเร็จ');}
+    finally{setCreating(false);}
   };
-  const markInvoiced = () => {
-    updateSessions(sessions.map((s) => (selected.has(s.id) && s.studentId === studentId && s.date >= dateFrom && s.date <= dateTo ? { ...s, invoiced: true } : s)));
-    showToast('ทำเครื่องหมายว่าแจ้งแล้ว');
-  };
-
-  return (
-    <div>
-      <SectionTitle sub="เลือกนักเรียนและคาบที่ต้องการ แล้วสร้างการ์ดสรุปการสอนสำหรับส่งทาง LINE">แจ้งค่าสอน</SectionTitle>
-      {students.length === 0 ? <EmptyState text="เพิ่มนักเรียนก่อนจึงจะแจ้งค่าสอนได้" /> : <>
-        <Card className="mb-4">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <Field label="นักเรียน">
-              <select value={studentId} onChange={(e) => setStudentId(e.target.value)} style={inputStyle} className="w-full rounded-lg px-3 py-2 text-sm">
-                {students.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
-            </Field>
-            <Field label="จากวันที่">
-              <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} style={inputStyle} className="w-full rounded-lg px-3 py-2 text-sm" />
-            </Field>
-            <Field label="ถึงวันที่">
-              <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} style={inputStyle} className="w-full rounded-lg px-3 py-2 text-sm" />
-            </Field>
-          </div>
-        </Card>
-        {candidates.length === 0 ? <EmptyState text="ไม่มีคาบสอนที่ยังไม่ได้แจ้งในช่วงเวลานี้" /> : <>
-          <Card className="mb-4">
-            <div className="mb-2 text-sm font-medium">เลือกคาบที่จะแจ้ง</div>
-            <div className="flex flex-col gap-1">
-              {candidates.map((c) => (
-                <label key={c.id} className="flex cursor-pointer items-center justify-between gap-3 py-1.5 text-sm">
-                  <span className="flex min-w-0 items-center gap-2"><input type="checkbox" checked={selected.has(c.id)} onChange={() => toggle(c.id)} /><span className="break-words">{fmtDateThai(c.date)} · {fmtHours(c.hours)} ชม.</span></span>
-                  <span className="shrink-0" style={{ color: C.gold }}>{fmtMoney(c.hours * c.rate)}</span>
-                </label>
-              ))}
-            </div>
-          </Card>
-          {chosen.length > 0 && <InvoiceCard student={student} sessions={chosen} invoiceDates={{ from: dateFrom, to: dateTo }} onMarkInvoiced={markInvoiced} />}
-          {chosen.length === 0 && <EmptyState text="เลือกคาบอย่างน้อยหนึ่งคาบเพื่อสร้างการ์ดรายงาน" />}
-        </>}
-      </>}
-    </div>
-  );
+  const dateLabel=d=>d?new Date(d+'T12:00:00').toLocaleDateString(lang==='en'?'en-GB':'th-TH',{day:'numeric',month:'short',year:'numeric'}):'—';
+  const fmt=n=>lang==='en'?'THB '+Math.round(Number(n)||0).toLocaleString('en-US'):'฿'+Math.round(Number(n)||0).toLocaleString('th-TH');
+  return <div>
+    <SectionTitle sub={lang==='en'?'Select a student and date range, then issue a fixed invoice for the chosen lessons':'เลือกนักเรียนและช่วงวันที่ จากนั้นสร้างใบแจ้งค่าสอนจากคาบที่เลือก'}>{lang==='en'?'Invoices':'แจ้งค่าสอน'}</SectionTitle>
+    {students.length===0?<EmptyState text={lang==='en'?'Add a student before creating an invoice':'เพิ่มนักเรียนก่อนจึงจะออกใบแจ้งค่าสอนได้'}/>:<>
+      <Card className="mb-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <Field label={lang==='en'?'Student':'นักเรียน'}><select value={studentId} onChange={e=>setStudentId(e.target.value)} style={inputStyle} className="w-full rounded-lg px-3 py-2 text-base">{students.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></Field>
+          <Field label={lang==='en'?'Parent name (optional)':'ชื่อผู้ปกครอง (ไม่บังคับ)'}><input value={parentName} onChange={e=>setParentName(e.target.value)} style={inputStyle} className="w-full rounded-lg px-3 py-2 text-base" placeholder={lang==='en'?'Parent / guardian name':'ชื่อผู้ปกครอง'}/></Field>
+          <Field label={lang==='en'?'From date':'จากวันที่'}><input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} style={inputStyle} className="w-full rounded-lg px-3 py-2 text-base"/></Field>
+          <Field label={lang==='en'?'To date':'ถึงวันที่'}><input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} style={inputStyle} className="w-full rounded-lg px-3 py-2 text-base"/></Field>
+        </div>
+      </Card>
+      <Card className="mb-4">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><div className="font-semibold text-sm">{lang==='en'?'Lessons in selected period':'คาบในช่วงวันที่เลือก'}</div><div className="text-xs" style={{color:C.inkSoft}}>{candidates.length} {lang==='en'?'available':'คาบที่ออกใบได้'}</div></div>
+        {inRange.length===0?<EmptyState text={lang==='en'?'No lessons in this period':'ไม่มีคาบในช่วงวันที่นี้'}/>:<div className="space-y-1">
+          {inRange.map(s=>{
+            const prior=invoiceForSession.get(s.id);
+            const locked=Boolean(s.invoiced||prior);
+            return <label key={s.id} className="flex items-start justify-between gap-3 rounded-lg border p-3 text-sm" style={{borderColor:C.line,background:locked?C.paper:'#fff',opacity:locked?0.85:1}}>
+              <span className="flex min-w-0 items-start gap-2">{!locked?<input type="checkbox" className="mt-1" checked={selected.has(s.id)} onChange={()=>toggle(s.id)}/>:<span className="mt-0.5 text-xs" style={{color:C.pine}}>✓</span>}<span className="min-w-0"><span className="block font-medium">{dateLabel(s.date)} · {Number(s.hours)||0} {lang==='en'?'hrs':'ชม.'}</span><span className="mt-0.5 block break-words text-xs" style={{color:C.inkSoft}}>{(s.note||'').split('\n').find(x=>x.startsWith('EN topic:'))?.slice(9)||(s.note||'').split('\n').find(x=>x.startsWith('สอน:'))?.slice(4)|| (lang==='en'?'Lesson':'คาบเรียน')}</span>{locked&&<span className="mt-1 block text-xs font-medium" style={{color:C.brick}}>{prior?(lang==='en'?'Included in '+prior.number:'อยู่ในใบ '+prior.number):(lang==='en'?'Already marked invoiced':'ทำเครื่องหมายแจ้งแล้วจากรายการเดิม')}</span>}</span></span><span className="shrink-0 font-semibold" style={{color:C.gold}}>{fmt(Number(s.hours)*Number(s.rate))}</span>
+            </label>;
+          })}
+        </div>}
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t pt-3" style={{borderColor:C.line}}><div><div className="text-xs" style={{color:C.inkSoft}}>{lang==='en'?'Selected total':'ยอดคาบที่เลือก'}</div><div className="text-xl font-semibold">{fmt(chosen.reduce((sum,s)=>sum+Number(s.hours)*Number(s.rate),0))}</div></div><button type="button" disabled={!chosen.length||creating||dateTo<dateFrom} onClick={create} className="rounded-lg px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40" style={{background:C.pine}}>{creating?(lang==='en'?'Creating…':'กำลังสร้าง…'):(lang==='en'?'Create invoice':'สร้างใบแจ้งค่าสอน')}</button></div>
+      </Card>
+      {invoices.length>0&&<Card className="mb-4"><div className="mb-2 font-semibold text-sm">{lang==='en'?'Previous invoices':'ใบแจ้งค่าสอนที่ออกแล้ว'}</div><div className="space-y-2">{invoices.filter(i=>!studentId||i.student_id===studentId).map(i=><button key={i.id} type="button" onClick={()=>setSelectedInvoiceId(i.id)} className="flex w-full items-center justify-between gap-3 rounded-lg border p-3 text-left text-sm" style={{borderColor:selectedInvoiceId===i.id?C.pine:C.line,background:selectedInvoiceId===i.id?C.pineTint:'#fff'}}><span><span className="block font-semibold">{i.number}</span><span className="mt-1 block text-xs" style={{color:C.inkSoft}}>{dateLabel(i.period_from)} – {dateLabel(i.period_to)}</span></span><span className="font-semibold">{fmt(i.total)}</span></button>)}</div></Card>}
+      {openedInvoice&&<InvoiceCard invoice={openedInvoice} student={students.find(s=>s.id===openedInvoice.student_id)} sessions={invoiceSessions} settings={settings} lang={lang} showToast={showToast}/>}
+      {!openedInvoice&&<div className="rounded-xl border p-4 text-sm" style={{borderColor:C.line,color:C.inkSoft,background:C.surface}}>{lang==='en'?'Create an invoice or select a previous invoice to preview and export it.':'สร้างใบแจ้งค่าสอนหรือเลือกใบเดิมเพื่อดูตัวอย่างและส่งออก'}</div>}
+    </>}
+  </div>;
 }
 
 // ---------- Business Intelligence ----------
