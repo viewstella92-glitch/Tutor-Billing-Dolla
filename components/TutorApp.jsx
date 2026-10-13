@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import ParentReportCard from './ParentReportCard';
+import InvoiceCard from './InvoiceCard';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import {
   LayoutDashboard, Users, CalendarDays, ClipboardList, Receipt, Download,
@@ -1719,154 +1720,65 @@ function InvoiceTab({ students, sessions, updateSessions, showToast }) {
   const [dateFrom, setDateFrom] = useState(firstOfMonth);
   const [dateTo, setDateTo] = useState(todayStr());
   const [selected, setSelected] = useState(new Set());
-  const canvasRef = useRef(null);
 
   const candidates = sessions
     .filter((s) => s.studentId === studentId && s.date >= dateFrom && s.date <= dateTo && !s.invoiced)
     .sort((a, b) => a.date.localeCompare(b.date));
+
   useEffect(() => {
     setSelected(new Set(candidates.map((c) => c.id)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [studentId, dateFrom, dateTo, sessions.length]);
+
   const student = students.find((s) => s.id === studentId);
   const chosen = candidates.filter((c) => selected.has(c.id));
-  const totalHours = chosen.reduce((sum, c) => sum + c.hours, 0);
-  const totalAmount = chosen.reduce((sum, c) => sum + c.hours * c.rate, 0);
-
   const toggle = (id) => {
-    const next = new Set(selected);
-    next.has(id) ? next.delete(id) : next.add(id);
-    setSelected(next);
-  };
-
-  useEffect(() => {
-    if (!student || chosen.length === 0 || !canvasRef.current) return;
-    drawSummaryCard(canvasRef.current, {
-      kicker: '📚  แจ้งค่าสอน',
-      title: student.name,
-      subtitle: `${fmtDateThai(dateFrom)} – ${fmtDateThai(dateTo)}`,
-      rows: chosen.map((c) => ({ left: fmtDateThai(c.date), right: `${fmtHours(c.hours)} ชม. · ${fmtMoney(c.hours * c.rate)}` })),
-      footerSmall: `รวม ${chosen.length} ครั้ง (${fmtHours(totalHours)} ชม.)`,
-      footerBig: `ยอดที่ต้องชำระ ${fmtMoney(totalAmount)}`,
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [studentId, dateFrom, dateTo, selected, sessions]);
-
-  const message = student && chosen.length > 0
-    ? `📚 แจ้งค่าสอน ${student.name}\n` +
-      chosen.map((c) => `- ${fmtDateThai(c.date)} ${fmtHours(c.hours)} ชม. (${fmtMoney(c.hours * c.rate)})`).join('\n') +
-      `\nรวม ${fmtHours(totalHours)} ชม. = ${fmtMoney(totalAmount)}`
-    : '';
-
-  const copyImage = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    canvas.toBlob(async (blob) => {
-      if (!blob) return;
-      try {
-        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-        showToast('คัดลอกรูปแล้ว ไปวางในแชท LINE ได้เลย');
-      } catch (e) {
-        showToast('อุปกรณ์นี้อาจไม่รองรับการคัดลอกรูป ลองดาวน์โหลดแทน');
-      }
+    setSelected(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
     });
   };
-
-  const downloadImage = () => {
-    const canvas = canvasRef.current;
-    if (!canvas || !student) return;
-    canvas.toBlob((blob) => {
-      if (!blob) return;
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `แจ้งค่าสอน-${student.name}-${dateFrom}-ถึง-${dateTo}.png`;
-      a.click();
-      URL.revokeObjectURL(url);
-    });
-  };
-
-  const copyText = async () => {
-    try {
-      await navigator.clipboard.writeText(message);
-      showToast('คัดลอกข้อความแล้ว');
-    } catch {
-      showToast('คัดลอกไม่สำเร็จ ลองเลือกข้อความเอง');
-    }
-  };
-
   const markInvoiced = () => {
-    updateSessions(sessions.map((s) => (selected.has(s.id) ? { ...s, invoiced: true } : s)));
+    updateSessions(sessions.map((s) => (selected.has(s.id) && s.studentId === studentId && s.date >= dateFrom && s.date <= dateTo ? { ...s, invoiced: true } : s)));
     showToast('ทำเครื่องหมายว่าแจ้งแล้ว');
   };
 
   return (
     <div>
-      <SectionTitle sub="เลือกนักเรียนและช่วงเวลา เพื่อสร้างเป็นรูปภาพแจ้งค่าสอนไว้ส่งเอง">แจ้งค่าสอน</SectionTitle>
-
-      {students.length === 0 ? (
-        <EmptyState text="เพิ่มนักเรียนก่อนจึงจะแจ้งค่าสอนได้" />
-      ) : (
-        <>
+      <SectionTitle sub="เลือกนักเรียนและคาบที่ต้องการ แล้วสร้างการ์ดสรุปการสอนสำหรับส่งทาง LINE">แจ้งค่าสอน</SectionTitle>
+      {students.length === 0 ? <EmptyState text="เพิ่มนักเรียนก่อนจึงจะแจ้งค่าสอนได้" /> : <>
+        <Card className="mb-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <Field label="นักเรียน">
+              <select value={studentId} onChange={(e) => setStudentId(e.target.value)} style={inputStyle} className="w-full rounded-lg px-3 py-2 text-sm">
+                {students.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </Field>
+            <Field label="จากวันที่">
+              <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} style={inputStyle} className="w-full rounded-lg px-3 py-2 text-sm" />
+            </Field>
+            <Field label="ถึงวันที่">
+              <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} style={inputStyle} className="w-full rounded-lg px-3 py-2 text-sm" />
+            </Field>
+          </div>
+        </Card>
+        {candidates.length === 0 ? <EmptyState text="ไม่มีคาบสอนที่ยังไม่ได้แจ้งในช่วงเวลานี้" /> : <>
           <Card className="mb-4">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <Field label="นักเรียน">
-                <select value={studentId} onChange={(e) => setStudentId(e.target.value)} style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg">
-                  {students.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </select>
-              </Field>
-              <Field label="จากวันที่">
-                <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg" />
-              </Field>
-              <Field label="ถึงวันที่">
-                <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg" />
-              </Field>
+            <div className="mb-2 text-sm font-medium">เลือกคาบที่จะแจ้ง</div>
+            <div className="flex flex-col gap-1">
+              {candidates.map((c) => (
+                <label key={c.id} className="flex cursor-pointer items-center justify-between gap-3 py-1.5 text-sm">
+                  <span className="flex min-w-0 items-center gap-2"><input type="checkbox" checked={selected.has(c.id)} onChange={() => toggle(c.id)} /><span className="break-words">{fmtDateThai(c.date)} · {fmtHours(c.hours)} ชม.</span></span>
+                  <span className="shrink-0" style={{ color: C.gold }}>{fmtMoney(c.hours * c.rate)}</span>
+                </label>
+              ))}
             </div>
           </Card>
-
-          {candidates.length === 0 ? (
-            <EmptyState text="ไม่มีคาบสอนที่ยังไม่ได้แจ้งในช่วงเวลานี้" />
-          ) : (
-            <>
-              <Card className="mb-4">
-                <div className="text-sm font-medium mb-2">เลือกคาบที่จะแจ้ง</div>
-                <div className="flex flex-col gap-1">
-                  {candidates.map((c) => (
-                    <label key={c.id} className="flex items-center justify-between py-1.5 text-sm cursor-pointer">
-                      <span className="flex items-center gap-2">
-                        <input type="checkbox" checked={selected.has(c.id)} onChange={() => toggle(c.id)} />
-                        {fmtDateThai(c.date)} · {fmtHours(c.hours)} ชม.
-                      </span>
-                      <span style={{ color: C.gold }}>{fmtMoney(c.hours * c.rate)}</span>
-                    </label>
-                  ))}
-                </div>
-              </Card>
-
-              {chosen.length > 0 && (
-                <div className="mb-4 overflow-x-auto flex justify-center">
-                  <canvas ref={canvasRef} style={{ maxWidth: '100%', height: 'auto', borderRadius: '20px' }} />
-                </div>
-              )}
-
-              <div className="flex flex-wrap items-center gap-2">
-                <button onClick={copyImage} disabled={chosen.length === 0} style={{ background: C.pine, color: C.paper }} className="flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-40">
-                  <Copy size={15} /> คัดลอกรูป
-                </button>
-                <button onClick={downloadImage} disabled={chosen.length === 0} style={{ border: `1px solid ${C.line}`, color: C.inkSoft }} className="flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-40">
-                  <Download size={15} /> ดาวน์โหลดรูป
-                </button>
-                <button onClick={copyText} disabled={!message} style={{ color: C.inkSoft }} className="text-sm font-medium px-3 py-2 underline disabled:opacity-40">
-                  คัดลอกเป็นข้อความแทน
-                </button>
-                <button onClick={markInvoiced} disabled={chosen.length === 0} style={{ border: `1px solid ${C.line}`, color: C.inkSoft }} className="text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-40">
-                  ทำเครื่องหมายว่าแจ้งแล้ว
-                </button>
-              </div>
-            </>
-          )}
-        </>
-      )}
+          {chosen.length > 0 && <InvoiceCard student={student} sessions={chosen} invoiceDates={{ from: dateFrom, to: dateTo }} onMarkInvoiced={markInvoiced} />}
+          {chosen.length === 0 && <EmptyState text="เลือกคาบอย่างน้อยหนึ่งคาบเพื่อสร้างการ์ดรายงาน" />}
+        </>}
+      </>}
     </div>
   );
 }
