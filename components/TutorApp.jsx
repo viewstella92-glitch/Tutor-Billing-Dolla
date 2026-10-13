@@ -1223,174 +1223,135 @@ function LessonPlanner({ student, sessions, duration, setDuration, onClose }) {
 
 // ---------- Schedule ----------
 // ---------- Sessions log ----------
-function SessionsTab({ students, sessions, updateSessions, getStudent, showToast, recordRequest, clearRecordRequest }) {
-  const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({
-    studentId: '', date: todayStr(), hours: '1',
-    subject: '', topic: '', performance: '', score: '', stuck: '', homework: '', enTopic: '', enPerformance: '', enStuck: '', enHomework: '', note: '', sourceSlotId: undefined
+function parseLessonNote(note='') {
+  const out={subject:'',topic:'',performance:'',score:'',stuck:'',homework:'',enTopic:'',enPerformance:'',enStuck:'',enHomework:'',note:''};
+  const extra=[];
+  String(note||'').split(/\r?\n/).forEach(line=>{
+    const m=line.match(/^(สอน|ผลการเรียน|คะแนน|ติดขัด|การบ้าน|EN topic|EN result|EN stuck|EN homework):\s*(.*)$/);
+    if(!m){if(line.trim())extra.push(line);return;}
+    const key={'ผลการเรียน':'performance','คะแนน':'score','ติดขัด':'stuck','การบ้าน':'homework','EN topic':'enTopic','EN result':'enPerformance','EN stuck':'enStuck','EN homework':'enHomework'}[m[1]];
+    if(m[1]==='สอน'){const p=m[2].split(' · ');out.subject=p.shift()||'';out.topic=p.join(' · ');}
+    else if(key)out[key]=m[2];
   });
+  out.note=extra.join('\n');
+  return out;
+}
 
-  const sorted = [...sessions].sort((a, b) => b.date.localeCompare(a.date));
-  const student = getStudent(form.studentId);
-
-  useEffect(() => {
-    if (!recordRequest?.slot) return;
-    const requestedStudent = getStudent(recordRequest.slot.studentId);
-    if (!requestedStudent) { clearRecordRequest?.(); return; }
-    setForm({ studentId: requestedStudent.id, date: recordRequest.date || todayStr(), hours: String(hoursBetween(recordRequest.slot.start, recordRequest.slot.end)), subject: (requestedStudent.subjects || [])[0] || '', topic: '', performance: '', score: '', stuck: '', homework: '', enTopic: '', enPerformance: '', enStuck: '', enHomework: '', note: '', sourceSlotId: recordRequest.slot.id });
-    setShowForm(true);
-    clearRecordRequest?.();
-  }, [recordRequest, getStudent, clearRecordRequest]);
-
-  const resetForm = () => setForm({
-    studentId: '', date: todayStr(), hours: '1',
-    subject: '', topic: '', performance: '', score: '', stuck: '', homework: '', enTopic: '', enPerformance: '', enStuck: '', enHomework: '', note: ''
-  });
-
-  const buildSmartNote = () => {
-    const parts = [];
-    if (form.subject || form.topic) parts.push(`สอน: ${[form.subject, form.topic].filter(Boolean).join(' · ')}`);
-    if (form.performance) parts.push(`ผลการเรียน: ${form.performance}`);
-    if (form.score) parts.push(`คะแนน: ${form.score}`);
-    if (form.stuck) parts.push(`ติดขัด: ${form.stuck}`);
-    if (form.homework) parts.push(`การบ้าน: ${form.homework}`);
-    if (form.enTopic) parts.push(`EN topic: ${form.enTopic}`);
-    if (form.enPerformance) parts.push(`EN result: ${form.enPerformance}`);
-    if (form.enStuck) parts.push(`EN stuck: ${form.enStuck}`);
-    if (form.enHomework) parts.push(`EN homework: ${form.enHomework}`);
-    if (form.note) parts.push(form.note);
+function LessonForm({initial={},students,onSave,onDelete,onCancel}) {
+  const editing=Boolean(initial?.id);
+  const parsed=parseLessonNote(initial?.note||'');
+  const [form,setForm]=useState(()=>({
+    studentId:initial.studentId||'',date:initial.date||todayStr(),hours:String(initial.hours??1),
+    rate:String(initial.rate??(students.find(s=>s.id===initial.studentId)?.rate??0)),
+    sourceSlotId:initial.sourceSlotId,
+    ...parsed
+  }));
+  const [busy,setBusy]=useState(false);
+  const set=(key,value)=>setForm(p=>({...p,[key]:value}));
+  const student=students.find(s=>s.id===form.studentId);
+  const hours=Number(form.hours);
+  const rate=Number(form.rate);
+  const buildNote=()=>{
+    const parts=[];
+    if(form.subject||form.topic)parts.push('สอน: '+[form.subject,form.topic].filter(Boolean).join(' · '));
+    if(form.performance)parts.push('ผลการเรียน: '+form.performance);
+    if(form.score)parts.push('คะแนน: '+form.score);
+    if(form.stuck)parts.push('ติดขัด: '+form.stuck);
+    if(form.homework)parts.push('การบ้าน: '+form.homework);
+    if(form.enTopic)parts.push('EN topic: '+form.enTopic);
+    if(form.enPerformance)parts.push('EN result: '+form.enPerformance);
+    if(form.enStuck)parts.push('EN stuck: '+form.enStuck);
+    if(form.enHomework)parts.push('EN homework: '+form.enHomework);
+    if(form.note.trim())parts.push(form.note.trim());
     return parts.join('\n\n');
   };
-
-  const addManual = () => {
-    if (!student || !form.hours) return;
-    const smartNote = buildSmartNote();
-    updateSessions([
-      ...sessions,
-      {
-        id: uid(), studentId: student.id, studentName: student.name,
-        date: form.date, hours: Number(form.hours), rate: student.rate,
-        note: smartNote, invoiced: false, paid: false, sourceSlotId: form.sourceSlotId
-      },
-    ]);
-    setShowForm(false);
-    resetForm();
-    showToast('บันทึกคาบสอนแล้ว');
+  const note=buildNote();
+  const valid=Boolean(student&&form.date&&Number.isFinite(hours)&&hours>0&&Number.isFinite(rate)&&rate>=0);
+  const submit=async()=>{
+    if(!valid||busy)return;
+    setBusy(true);
+    try{
+      await onSave({
+        ...(editing?initial:{}),id:editing?initial.id:uid(),
+        studentId:student.id,studentName:student.name,date:form.date,
+        hours,rate,note,invoiced:Boolean(initial.invoiced),paid:Boolean(initial.paid),
+        sourceSlotId:form.sourceSlotId||initial.sourceSlotId||null
+      });
+    }finally{setBusy(false);}
   };
-
-  const togglePaid = (s) => updateSessions(sessions.map((x) => (x.id === s.id ? { ...x, paid: !x.paid } : x)));
-  const remove = (id) => {
-    if (!confirm('ลบคาบสอนนี้?')) return;
-    updateSessions(sessions.filter((s) => s.id !== id), [id]);
-  };
-
-  const preview = buildSmartNote();
-
-  return (
-    <div>
-      <div className="flex items-center justify-between mb-5">
-        <SectionTitle sub="บันทึกสิ่งที่สอน ผลการเรียน และสิ่งที่ต้องติดตาม">บันทึกคาบสอน</SectionTitle>
-        <button onClick={() => setShowForm(true)} disabled={students.length === 0} style={{ background: C.pine, color: C.paper }} className="flex items-center gap-1.5 text-sm font-medium px-3 py-2 rounded-lg h-fit disabled:opacity-40">
-          <Plus size={16} /> เพิ่มคาบสอน
-        </button>
-      </div>
-
-      {sorted.length === 0 && <EmptyState text="ยังไม่มีบันทึกคาบสอน" />}
-
-      <div className="flex flex-col">
-        {sorted.map((s, i) => {
-          const name = getStudent(s.studentId)?.name || s.studentName || 'ไม่ทราบชื่อ';
-          return (
-            <div key={s.id} style={{ borderBottom: i < sorted.length - 1 ? `1px dashed ${C.line}` : 'none' }} className="flex items-center justify-between py-3 gap-3">
-              <div className="min-w-0">
-                <div className="text-sm font-medium">{name}</div>
-                <div style={{ color: C.inkSoft }} className="text-xs">{fmtDateThai(s.date)} · {fmtHours(s.hours)} ชม.</div>
-                {s.note && <div style={{ color: C.inkSoft, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }} className="text-sm mt-2 leading-7">{s.note}</div>}
-              </div>
-              <div className="flex items-center gap-3 shrink-0">
-                <span style={{ color: C.gold }} className="text-sm font-medium">{fmtMoney(s.hours * s.rate)}</span>
-                {s.invoiced && <span style={{ color: C.inkSoft }} className="text-xs">แจ้งแล้ว</span>}
-                <button onClick={() => togglePaid(s)} style={s.paid ? { color: C.pine } : { color: C.brick }} className="text-xs font-medium flex items-center gap-1">
-                  {s.paid ? <><CheckCircle2 size={14} /> จ่ายแล้ว</> : <><Circle size={14} /> ยังไม่จ่าย</>}
-                </button>
-                <button onClick={() => remove(s.id)} style={{ color: C.inkSoft }} className="p-1"><Trash2 size={14} /></button>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {showForm && (
-        <Modal onClose={() => setShowForm(false)} title="บันทึกคาบสอน">
-          <Field label="นักเรียน">
-            <select value={form.studentId} onChange={(e) => setForm({ ...form, studentId: e.target.value })} style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg">
-              <option value="">เลือกนักเรียน</option>
-              {students.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
-          </Field>
-
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="วันที่">
-              <input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg" />
-            </Field>
-            <Field label="จำนวนชั่วโมง">
-              <input type="number" step="0.25" value={form.hours} onChange={(e) => setForm({ ...form, hours: e.target.value })} style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg" />
-            </Field>
-          </div>
-
-          <div style={{ background: C.pineTint, border: `1px solid ${C.line}` }} className="rounded-xl p-3 mb-3">
-            <div className="text-sm font-medium mb-2" style={{ color: C.pineDark }}>สรุปคาบนี้</div>
-            <Field label="วิชา">
-              <input value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} placeholder={student?.subjects?.[0] || 'เช่น คณิตศาสตร์'} style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg" />
-            </Field>
-            <Field label="เรื่องที่สอน">
-              <textarea autoFocus rows={2} value={form.topic} onChange={(e) => setForm({ ...form, topic: e.target.value })} placeholder="ระบุหัวข้อย่อยหรือเนื้อหาที่เรียน พิมพ์ได้หลายบรรทัด" style={{ ...inputStyle, resize: "vertical", lineHeight: 1.75 }} className="w-full text-base px-3 py-3 rounded-xl min-h-20 focus:outline-none focus:ring-2 focus:ring-emerald-700/20" />
-            </Field>
-            <Field label="ผลการเรียน / ทำได้แค่ไหน">
-              <textarea rows={2} value={form.performance} onChange={(e) => setForm({ ...form, performance: e.target.value })} placeholder="นักเรียนทำอะไรได้แล้วบ้าง มีจุดไหนที่ทำได้ดีขึ้น" style={{ ...inputStyle, resize: "vertical", lineHeight: 1.75 }} className="w-full text-base px-3 py-3 rounded-xl min-h-20 focus:outline-none focus:ring-2 focus:ring-emerald-700/20" />
-            </Field>
-            <Field label="คะแนน (ถ้ามี)">
-              <input type="number" min="0" max="100" value={form.score} onChange={(e) => setForm({ ...form, score: e.target.value })} placeholder="เช่น 72" style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg" />
-            </Field>
-            <Field label="จุดที่ยังติด">
-              <textarea rows={2} value={form.stuck} onChange={(e) => setForm({ ...form, stuck: e.target.value })} placeholder="ระบุเรื่องที่ยังไม่เข้าใจหรือควรทบทวน" style={{ ...inputStyle, resize: "vertical", lineHeight: 1.75 }} className="w-full text-base px-3 py-3 rounded-xl min-h-20 focus:outline-none focus:ring-2 focus:ring-emerald-700/20" />
-            </Field>
-            <Field label="การบ้าน / สิ่งที่ต้องทำต่อ">
-              <textarea rows={2} value={form.homework} onChange={(e) => setForm({ ...form, homework: e.target.value })} placeholder="ระบุการบ้าน แบบฝึกหัด หรือสิ่งที่ต้องเตรียมสำหรับคาบหน้า" style={{ ...inputStyle, resize: "vertical", lineHeight: 1.75 }} className="w-full text-base px-3 py-3 rounded-xl min-h-20 focus:outline-none focus:ring-2 focus:ring-emerald-700/20" />
-            </Field>
-            <div className="mt-3 border-t pt-3" style={{borderColor:C.line}}>
-              <div className="mb-2 text-sm font-semibold" style={{color:C.pineDark}}>English details (optional)</div>
-              <p className="mb-3 text-xs" style={{color:C.inkSoft}}>กรอกภาษาอังกฤษเพิ่มได้ เพื่อสลับทำรายงานให้ผู้ปกครองภาษาอังกฤษได้ หากเว้นว่างระบบจะใช้ข้อมูลภาษาไทยแทน</p>
-              <Field label="Lesson topic (EN)">
-                <textarea rows={2} value={form.enTopic} onChange={(e) => setForm({ ...form, enTopic: e.target.value })} placeholder="e.g. Linear equations and word problems" style={{ ...inputStyle, resize: "vertical", lineHeight: 1.6 }} className="w-full text-base px-3 py-3 rounded-xl min-h-16" />
-              </Field>
-              <Field label="Learning outcome (EN)">
-                <textarea rows={2} value={form.enPerformance} onChange={(e) => setForm({ ...form, enPerformance: e.target.value })} placeholder="What the student understood or improved" style={{ ...inputStyle, resize: "vertical", lineHeight: 1.6 }} className="w-full text-base px-3 py-3 rounded-xl min-h-16" />
-              </Field>
-              <Field label="Needs more practice (EN)">
-                <textarea rows={2} value={form.enStuck} onChange={(e) => setForm({ ...form, enStuck: e.target.value })} placeholder="Topics that need more practice" style={{ ...inputStyle, resize: "vertical", lineHeight: 1.6 }} className="w-full text-base px-3 py-3 rounded-xl min-h-16" />
-              </Field>
-              <Field label="Homework / next steps (EN)">
-                <textarea rows={2} value={form.enHomework} onChange={(e) => setForm({ ...form, enHomework: e.target.value })} placeholder="Homework and preparation for next lesson" style={{ ...inputStyle, resize: "vertical", lineHeight: 1.6 }} className="w-full text-base px-3 py-3 rounded-xl min-h-16" />
-              </Field>
-            </div>
-            <Field label="โน้ตเพิ่มเติม">
-              <textarea rows={4} value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="รายละเอียดเพิ่มเติม เช่น ตัวอย่างโจทย์ที่ทำ ลำดับเนื้อหา หรือข้อความที่อยากแจ้งผู้ปกครอง" style={{ ...inputStyle, resize: "vertical", lineHeight: 1.8 }} className="w-full text-base px-3 py-3 rounded-xl min-h-28 focus:outline-none focus:ring-2 focus:ring-emerald-700/20" />
-            </Field>
-          </div>
-
-          {preview && (
-            <div className="mb-2">
-              <div className="text-xs mb-1" style={{ color: C.inkSoft }}>ตัวอย่างบันทึกที่จะถูกเก็บในประวัติ</div>
-              <div style={{ background: C.paper, border: `1px solid ${C.line}`, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }} className="rounded-xl p-4 text-sm leading-7">{preview}</div>
-            </div>
-          )}
-
-          <ModalActions onCancel={() => setShowForm(false)} onSave={addManual} saveLabel="บันทึกคาบนี้" />
-        </Modal>
-      )}
-    </div>
+  const fieldStyle={background:C.paper,border:'1px solid '+C.line,color:C.ink};
+  const textInput='w-full rounded-lg px-3 py-2 text-base sm:text-sm';
+  const textArea='w-full rounded-xl px-3 py-3 text-base leading-7 resize-y focus:outline-none focus:ring-2 focus:ring-emerald-700/20';
+  const field=(label,key,placeholder,area=false,autoFocus=false)=>(
+    <label className="mb-3 block text-xs" style={{color:C.inkSoft}}>{label}
+      {area?<textarea autoFocus={autoFocus} rows={2} value={form[key]} onChange={e=>set(key,e.target.value)} placeholder={placeholder} className={textArea+' mt-1 min-h-20'} style={fieldStyle}/>
+      :<input value={form[key]} onChange={e=>set(key,e.target.value)} placeholder={placeholder} className={textInput+' mt-1'} style={fieldStyle}/>}
+    </label>
   );
+  return <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4" style={{background:'rgba(35,40,43,.45)'}}>
+    <div role="dialog" aria-modal="true" aria-label={editing?'แก้ไขบันทึกคาบสอน':'บันทึกคาบสอน'} className="w-full overflow-y-auto overscroll-contain rounded-t-2xl p-5 pb-32 sm:max-w-xl sm:rounded-2xl sm:p-6" style={{background:C.surface,maxHeight:'90dvh'}}>
+      <div className="mb-4 flex items-center justify-between"><div><h2 className="text-lg font-semibold" style={{color:C.ink}}>{editing?'แก้ไขบันทึกคาบสอน':'บันทึกคาบสอน'}</h2><p className="mt-1 text-xs" style={{color:C.inkSoft}}>{editing?'แก้ไขรายละเอียดของคาบเดิม':'ตรวจสอบข้อมูลคาบ แล้วบันทึกเมื่อพร้อม'}</p></div><button type="button" onClick={onCancel} aria-label="ปิดฟอร์ม" className="rounded-lg p-2" style={{color:C.inkSoft}}><X size={18}/></button></div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <label className="mb-1 block text-xs" style={{color:C.inkSoft}}>นักเรียน<select value={form.studentId} onChange={e=>{const s=students.find(x=>x.id===e.target.value);setForm(p=>({...p,studentId:e.target.value,rate:p.rate===''?String(s?.rate??0):p.rate}));}} className={textInput+' mt-1'} style={fieldStyle}><option value="">เลือกนักเรียน</option>{students.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
+        <label className="mb-1 block text-xs" style={{color:C.inkSoft}}>วันที่<input type="date" value={form.date} onChange={e=>set('date',e.target.value)} className={textInput+' mt-1'} style={fieldStyle}/></label>
+        <label className="mb-1 block text-xs" style={{color:C.inkSoft}}>จำนวนชั่วโมง<input type="number" min="0.25" step="0.25" value={form.hours} onChange={e=>set('hours',e.target.value)} className={textInput+' mt-1'} style={fieldStyle}/></label>
+        <label className="mb-1 block text-xs" style={{color:C.inkSoft}}>ค่าเรียนต่อชั่วโมง (บาท)<input type="number" min="0" step="1" value={form.rate} onChange={e=>set('rate',e.target.value)} className={textInput+' mt-1'} style={fieldStyle}/></label>
+      </div>
+      <div className="my-3 rounded-xl p-3" style={{background:C.pineTint,border:'1px solid '+C.line}}><div className="text-xs" style={{color:C.pineDark}}>ค่าเรียนคาบนี้</div><div className="mt-1 text-xl font-semibold" style={{color:C.pineDark}}>{valid?'฿'+Math.round(hours*rate).toLocaleString('th-TH'):'ตรวจสอบนักเรียน ชั่วโมง และอัตราค่าสอน'}</div></div>
+      {field('วิชา','subject',student?.subjects?.[0]||'เช่น คณิตศาสตร์')}
+      {field('เรื่องที่สอน','topic','ระบุหัวข้อหรือเนื้อหาที่เรียน',true,true)}
+      {field('ผลการเรียน / ทำได้แค่ไหน','performance','นักเรียนเข้าใจหรือทำอะไรได้แล้วบ้าง',true)}
+      {field('คะแนน (ถ้ามี)','score','เช่น 8/10')}
+      {field('จุดที่ยังติด','stuck','เรื่องที่ควรทบทวนเพิ่มเติม',true)}
+      {field('การบ้าน / สิ่งที่ต้องทำต่อ','homework','แบบฝึกหัดหรือสิ่งที่ต้องเตรียม',true)}
+      <div className="my-3 border-t pt-3" style={{borderColor:C.line}}><div className="mb-2 text-sm font-semibold" style={{color:C.pineDark}}>English details (optional)</div>
+        {field('Lesson topic (EN)','enTopic','e.g. Linear equations',true)}
+        {field('Learning outcome (EN)','enPerformance','What the student understood',true)}
+        {field('Needs more practice (EN)','enStuck','Topics to review',true)}
+        {field('Homework / next steps (EN)','enHomework','Homework for next lesson',true)}
+      </div>
+      {field('โน้ตเพิ่มเติม','note','รายละเอียดเพิ่มเติมสำหรับผู้ปกครอง',true)}
+      {note&&<div className="mb-3 rounded-xl p-3 text-sm leading-6" style={{background:C.paper,border:'1px solid '+C.line,whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}><div className="mb-1 text-xs" style={{color:C.inkSoft}}>ตัวอย่างบันทึกที่จะถูกเก็บ</div>{note}</div>}
+      <div className="mt-4 flex flex-wrap gap-2"><button type="button" onClick={onCancel} className="flex-1 rounded-lg py-2.5 text-sm" style={{border:'1px solid '+C.line,color:C.inkSoft}}>ยกเลิก</button>{editing&&onDelete&&<button type="button" onClick={()=>onDelete(initial.id)} className="rounded-lg px-4 py-2.5 text-sm" style={{background:C.brickTint,color:C.brick}}>ลบคาบ</button>}<button type="button" disabled={!valid||busy} onClick={submit} className="flex-1 rounded-lg py-2.5 text-sm font-medium disabled:opacity-40" style={{background:C.pine,color:C.paper}}>{busy?'กำลังบันทึก…':'บันทึกคาบนี้'}</button></div>
+    </div>
+  </div>;
+}
+
+function SessionsTab({ students, sessions, updateSessions, getStudent, showToast, recordRequest, clearRecordRequest }) {
+  const [showForm,setShowForm]=useState(false);
+  const [editing,setEditing]=useState(null);
+  const sorted=[...sessions].sort((a,b)=>b.date.localeCompare(a.date));
+  useEffect(()=>{
+    if(!recordRequest?.slot)return;
+    const slot=recordRequest.slot;
+    const student=getStudent(slot.studentId);
+    if(!student){clearRecordRequest?.();return;}
+    setEditing({studentId:student.id,studentName:student.name,date:recordRequest.date||todayStr(),hours:hoursBetween(slot.start,slot.end),rate:Number(student.rate)||0,note:'',invoiced:false,paid:false,sourceSlotId:slot.id});
+    setShowForm(true);clearRecordRequest?.();
+  },[recordRequest,getStudent,clearRecordRequest]);
+  const cancel=()=>{setShowForm(false);setEditing(null);};
+  const save=async(item)=>{
+    const exists=sessions.some(s=>s.id===item.id);
+    await updateSessions(exists?sessions.map(s=>s.id===item.id?item:s):[...sessions,item]);
+    cancel();showToast(exists?'อัปเดตบันทึกคาบแล้ว':'บันทึกคาบสอนแล้ว');
+  };
+  const remove=async(id)=>{
+    if(!confirm('ลบคาบสอนนี้?'))return;
+    await updateSessions(sessions.filter(s=>s.id!==id),[id]);cancel();showToast('ลบคาบสอนแล้ว');
+  };
+  const togglePaid=s=>updateSessions(sessions.map(x=>x.id===s.id?{...x,paid:!x.paid}:x));
+  return <div>
+    <div className="mb-5 flex items-center justify-between gap-3"><SectionTitle sub="บันทึกสิ่งที่สอน ผลการเรียน และสิ่งที่ต้องติดตาม">บันทึกคาบสอน</SectionTitle><button onClick={()=>{setEditing(null);setShowForm(true);}} disabled={!students.length} style={{background:C.pine,color:C.paper}} className="flex h-fit items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium disabled:opacity-40"><Plus size={16}/>เพิ่มคาบสอน</button></div>
+    {sorted.length===0&&<EmptyState text="ยังไม่มีบันทึกคาบสอน"/>}
+    <div className="flex flex-col">{sorted.map((s,i)=>{
+      const name=getStudent(s.studentId)?.name||s.studentName||'ไม่ทราบชื่อ';
+      return <div key={s.id} style={{borderBottom:i<sorted.length-1?'1px dashed '+C.line:'none'}} className="flex flex-col justify-between gap-3 py-4 sm:flex-row sm:items-start">
+        <div className="min-w-0 flex-1"><div className="text-sm font-medium">{name}</div><div className="text-xs" style={{color:C.inkSoft}}>{fmtDateThai(s.date)} · {fmtHours(s.hours)} ชม.</div>{s.note?<div className="mt-2 whitespace-pre-wrap text-sm leading-7" style={{color:C.inkSoft,overflowWrap:'anywhere'}}>{s.note}</div>:<div className="mt-2 text-xs" style={{color:C.gold}}>ยังไม่มีโน้ต</div>}</div>
+        <div className="flex shrink-0 flex-wrap items-center gap-3"><span className="text-sm font-medium" style={{color:C.gold}}>{fmtMoney(Number(s.hours||0)*Number(s.rate||0))}</span>{s.invoiced&&<span className="text-xs" style={{color:C.inkSoft}}>แจ้งแล้ว</span>}<button onClick={()=>togglePaid(s)} style={s.paid?{color:C.pine}:{color:C.brick}} className="flex items-center gap-1 text-xs font-medium">{s.paid?<><CheckCircle2 size={14}/>จ่ายแล้ว</>:<><Circle size={14}/>ยังไม่จ่าย</>}</button><button onClick={()=>{setEditing(s);setShowForm(true);}} className="flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs" style={{background:C.pineTint,color:C.pineDark}}><Pencil size={13}/>แก้โน้ต</button><button onClick={()=>remove(s.id)} aria-label="ลบคาบสอน" style={{color:C.inkSoft}} className="p-1"><Trash2 size={14}/></button></div>
+      </div>;
+    })}</div>
+    {showForm&&<LessonForm initial={editing||{}} students={students} onSave={save} onDelete={editing?remove:undefined} onCancel={cancel}/>}
+  </div>;
 }
 
 // ---------- Invoice / message generator ----------
