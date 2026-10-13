@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
+import ParentReportCard from './ParentReportCard';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import {
   LayoutDashboard, Users, CalendarDays, ClipboardList, Receipt, Download,
@@ -679,7 +680,7 @@ function StudentsTab({ students, updateStudents, sessions }) {
       {typeof historyStudent === 'string' && historyStudent.startsWith('parent:') && (() => {
         const student = students.find(s => s.id === historyStudent.slice(7));
         if (!student) return null;
-        return <ParentReport student={student} sessions={sessions} onClose={()=>setHistoryStudent(null)} />;
+        return <ParentReportCard student={student} sessions={sessions} />;
       })()}
 
       {typeof historyStudent === 'string' && historyStudent.startsWith('worksheet:') && (() => {
