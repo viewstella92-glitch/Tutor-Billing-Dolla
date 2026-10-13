@@ -46,6 +46,7 @@ function daysBetween(dateStr, todayIso) { return Math.floor((new Date(todayIso) 
 
 export default function App() {
   const [tab, setTab] = useState('dashboard');
+  const [recordRequest, setRecordRequest] = useState(null);
   const [students, setStudents] = useState([]);
   const [schedule, setSchedule] = useState([]);
   const [sessions, setSessions] = useState([]);
@@ -150,7 +151,6 @@ export default function App() {
     { id: 'business', label: 'ธุรกิจ', icon: BarChart },
     { id: 'students', label: 'นักเรียน', icon: Users },
     { id: 'schedule', label: 'ตารางสอน', icon: CalendarDays },
-    { id: 'calendar', label: 'ปฏิทินเรียน', icon: Send },
     { id: 'sessions', label: 'บันทึกคาบสอน', icon: ClipboardList },
     { id: 'invoice', label: 'แจ้งค่าสอน', icon: Receipt },
     { id: 'export', label: 'ส่งออกข้อมูล', icon: Download },
@@ -214,18 +214,17 @@ export default function App() {
 
       <div className="flex-1 px-4 py-6 md:px-10 md:py-10 max-w-4xl mx-auto w-full">
         {tab === 'dashboard' && (
-          <Dashboard students={students} sessions={sessions} schedule={schedule} updateSessions={updateSessions} getStudent={getStudent} showToast={showToast} setTab={setTab} />
+          <Dashboard students={students} sessions={sessions} schedule={schedule} updateSessions={updateSessions} getStudent={getStudent} showToast={showToast} setTab={setTab} onOpenLessonForm={(slot, date) => { setRecordRequest({ slot, date }); setTab('sessions'); }} />
         )}
         {tab === 'students' && <StudentsTab students={students} updateStudents={updateStudents} sessions={sessions} />}
         {tab === 'progress' && <ProgressIntelligence students={students} sessions={sessions} />}
         {tab === 'alerts' && <SmartAlerts students={students} sessions={sessions} schedule={schedule} />}
         {tab === 'business' && <BusinessIntelligence students={students} sessions={sessions} schedule={schedule} />}
         {tab === 'schedule' && (
-          <ScheduleTab students={students} schedule={schedule} updateSchedule={updateSchedule} sessions={sessions} updateSessions={updateSessions} getStudent={getStudent} showToast={showToast} />
+          <ScheduleTab students={students} schedule={schedule} updateSchedule={updateSchedule} sessions={sessions} updateSessions={updateSessions} getStudent={getStudent} showToast={showToast} onOpenLessonForm={(slot, date) => { setRecordRequest({ slot, date }); setTab('sessions'); }} />
         )}
-        {tab === 'calendar' && <CalendarTab students={students} schedule={schedule} showToast={showToast} />}
         {tab === 'sessions' && (
-          <SessionsTab students={students} sessions={sessions} updateSessions={updateSessions} getStudent={getStudent} showToast={showToast} />
+          <SessionsTab students={students} sessions={sessions} updateSessions={updateSessions} getStudent={getStudent} showToast={showToast} recordRequest={recordRequest} clearRecordRequest={() => setRecordRequest(null)} />
         )}
         {tab === 'invoice' && (
           <InvoiceTab students={students} sessions={sessions} updateSessions={updateSessions} showToast={showToast} />
@@ -351,7 +350,7 @@ function SmartAlerts({ students, sessions, schedule }) {
   );
 }
 
-function Dashboard({ students, sessions, schedule, updateSessions, getStudent, showToast, setTab }) {
+function Dashboard({ students, sessions, schedule, updateSessions, getStudent, showToast, setTab, onOpenLessonForm }) {
   if (students.length === 0) {
     return (
       <div>
@@ -392,15 +391,9 @@ function Dashboard({ students, sessions, schedule, updateSessions, getStudent, s
     .sort((a, b) => a.start.localeCompare(b.start));
 
   const markTaught = (slot) => {
-    const student = getStudent(slot.studentId);
-    if (!student) return;
     const alreadyLogged = sessions.some((s) => s.sourceSlotId === slot.id && s.date === today);
     if (alreadyLogged) return;
-    const hours = hoursBetween(slot.start, slot.end);
-    const next = [
-      ...sessions,
-      { id: uid(), studentId: student.id, studentName: student.name, date: today, hours, rate: student.rate, note: '', invoiced: false, paid: false, sourceSlotId: slot.id },
-    ];    updateSessions(next);    showToast(`บันทึกคาบสอนของ ${student.name} แล้ว`);
+    onOpenLessonForm?.(slot, today);
   };
 
   return (
@@ -1153,10 +1146,9 @@ function LessonPlanner({ student, sessions, duration, setDuration, onClose }) {
 }
 
 // ---------- Schedule ----------
-function ScheduleTab({ students, schedule, updateSchedule, sessions, updateSessions, getStudent, showToast }) {
+function ScheduleTab({ students, schedule, updateSchedule, sessions, updateSessions, getStudent, showToast, onOpenLessonForm }) {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ studentId: '', recurring: true, day: 0, date: todayStr(), start: '16:00', end: '17:30' });
-  const [confirmSlot, setConfirmSlot] = useState(null); // {slot, date, hours}
 
   const addSlot = () => {
     if (!form.studentId) return;
@@ -1177,19 +1169,7 @@ function ScheduleTab({ students, schedule, updateSchedule, sessions, updateSessi
   };
 
   const openConfirm = (slot, date) => {
-    setConfirmSlot({ slot, date, hours: hoursBetween(slot.start, slot.end), note: '' });
-  };
-
-  const saveConfirm = () => {
-    const { slot, date, hours, note } = confirmSlot;
-    const student = getStudent(slot.studentId);
-    if (!student) return;
-    updateSessions([
-      ...sessions,
-      { id: uid(), studentId: student.id, studentName: student.name, date, hours: Number(hours), rate: student.rate, note: note || '', invoiced: false, paid: false, sourceSlotId: slot.id },
-    ]);
-    showToast(`บันทึกคาบสอนของ ${student.name} แล้ว`);
-    setConfirmSlot(null);
+    onOpenLessonForm?.(slot, date);
   };
 
   const recurringSlots = schedule.filter((s) => s.recurring);
@@ -1316,271 +1296,30 @@ function ScheduleTab({ students, schedule, updateSchedule, sessions, updateSessi
         </Modal>
       )}
 
-      {confirmSlot && (
-        <Modal onClose={() => setConfirmSlot(null)} title="ยืนยันคาบสอน">
-          <Field label="วันที่">
-            <input type="date" value={confirmSlot.date} onChange={(e) => setConfirmSlot({ ...confirmSlot, date: e.target.value })} style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg" />
-          </Field>
-          <Field label="จำนวนชั่วโมง">
-            <input type="number" step="0.25" value={confirmSlot.hours} onChange={(e) => setConfirmSlot({ ...confirmSlot, hours: e.target.value })} style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg" />
-          </Field>
-          <Field label="โน้ต (ไม่บังคับ)">
-            <textarea rows={5} value={confirmSlot.note} onChange={(e) => setConfirmSlot({ ...confirmSlot, note: e.target.value })} placeholder="สรุปสิ่งที่สอน เนื้อหาที่เรียน ปัญหาที่พบ หรือการบ้าน...\nพิมพ์ขึ้นบรรทัดใหม่ได้" style={{ ...inputStyle, resize: "vertical", whiteSpace: "pre-wrap", lineHeight: 1.75 }} className="w-full text-sm px-3 py-3 rounded-xl min-h-32 focus:outline-none focus:ring-2 focus:ring-emerald-700/20" />
-          </Field>
-          <ModalActions onCancel={() => setConfirmSlot(null)} onSave={saveConfirm} saveLabel="บันทึกคาบสอน" />
-        </Modal>
-      )}
-    </div>
-  );
-}
 
-// ---------- Calendar summary (send schedule + cost to parents) ----------
-const WEEKDAY_ABBR = ['จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.', 'ส.', 'อา.'];
-
-function roundRectPath(ctx, x, y, w, h, r) {
-  const rr = typeof r === 'number' ? { tl: r, tr: r, br: r, bl: r } : r;
-  ctx.beginPath();
-  ctx.moveTo(x + rr.tl, y);
-  ctx.lineTo(x + w - rr.tr, y);
-  ctx.arcTo(x + w, y, x + w, y + rr.tr, rr.tr);
-  ctx.lineTo(x + w, y + h - rr.br);
-  ctx.arcTo(x + w, y + h, x + w - rr.br, y + h, rr.br);
-  ctx.lineTo(x + rr.bl, y + h);
-  ctx.arcTo(x, y + h, x, y + h - rr.bl, rr.bl);
-  ctx.lineTo(x, y + rr.tl);
-  ctx.arcTo(x, y, x + rr.tl, y, rr.tl);
-  ctx.closePath();
-}
-
-function drawSummaryCard(canvas, { kicker, title, subtitle, rows, footerSmall, footerBig }) {
-  const width = 720;
-  const headerH = 130;
-  const rowH = 46;
-  const footerH = 104;
-  const bottomPad = 24;
-  const height = headerH + rows.length * rowH + footerH + bottomPad;
-  const dpr = window.devicePixelRatio || 1;
-
-  canvas.width = width * dpr;
-  canvas.height = height * dpr;
-  canvas.style.width = width + 'px';
-  canvas.style.height = height + 'px';
-  const ctx = canvas.getContext('2d');
-  ctx.scale(dpr, dpr);
-  ctx.clearRect(0, 0, width, height);
-
-  roundRectPath(ctx, 0, 0, width, height, 20);
-  ctx.fillStyle = C.surface;
-  ctx.fill();
-  ctx.lineWidth = 1;
-  ctx.strokeStyle = C.line;
-  ctx.stroke();
-
-  ctx.save();
-  roundRectPath(ctx, 0, 0, width, headerH, { tl: 20, tr: 20, br: 0, bl: 0 });
-  ctx.clip();
-  ctx.fillStyle = C.pine;
-  ctx.fillRect(0, 0, width, headerH);
-  ctx.restore();
-
-  ctx.textBaseline = 'alphabetic';
-  ctx.textAlign = 'left';
-  ctx.fillStyle = 'rgba(255,255,255,0.75)';
-  ctx.font = '600 15px sans-serif';
-  ctx.fillText(kicker, 32, 40);
-
-  ctx.fillStyle = '#FFFFFF';
-  ctx.font = '700 30px sans-serif';
-  ctx.fillText(title, 32, 78);
-
-  ctx.fillStyle = 'rgba(255,255,255,0.85)';
-  ctx.font = '500 16px sans-serif';
-  ctx.fillText(subtitle, 32, 106);
-
-  let y = headerH;
-  rows.forEach((row, i) => {
-    if (i % 2 === 1) {
-      ctx.fillStyle = C.paperDeep;
-      ctx.fillRect(0, y, width, rowH);
-    }
-    ctx.fillStyle = C.ink;
-    ctx.font = '600 17px sans-serif';
-    ctx.textBaseline = 'middle';
-    ctx.textAlign = 'left';
-    ctx.fillText(row.left, 32, y + rowH / 2);
-
-    ctx.fillStyle = C.inkSoft;
-    ctx.font = '400 15px sans-serif';
-    ctx.textAlign = 'right';
-    ctx.fillText(row.right, width - 32, y + rowH / 2);
-
-    if (i < rows.length - 1) {
-      ctx.strokeStyle = C.line;
-      ctx.setLineDash([4, 4]);      ctx.beginPath();
-      ctx.moveTo(24, y + rowH);
-      ctx.lineTo(width - 24, y + rowH);      ctx.stroke();
-      ctx.setLineDash([]);
-    }
-    y += rowH;
-  });
-
-  const footerY = y + 16;
-  roundRectPath(ctx, 24, footerY, width - 48, footerH - 32, 14);
-  ctx.fillStyle = C.goldTint;
-  ctx.fill();
-
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'alphabetic';
-  ctx.fillStyle = C.inkSoft;
-  ctx.font = '500 14px sans-serif';
-  ctx.fillText(footerSmall, 44, footerY + 28);
-
-  ctx.fillStyle = C.gold;
-  ctx.font = '700 24px sans-serif';
-  ctx.fillText(footerBig, 44, footerY + 56);
-}
-
-function CalendarTab({ students, schedule, showToast }) {
-  const [studentId, setStudentId] = useState(students[0]?.id || '');
-  const [month, setMonth] = useState(todayStr().slice(0, 7));
-  const canvasRef = useRef(null);
-
-  const student = students.find((s) => s.id === studentId);
-
-  const entries = [];
-  if (student) {
-    const [y, m] = month.split('-').map(Number);
-    const daysInMonth = new Date(y, m, 0).getDate();
-    const recurring = schedule.filter((sl) => sl.recurring && sl.studentId === studentId);
-    const oneOff = schedule.filter((sl) => !sl.recurring && sl.studentId === studentId && sl.date.startsWith(month));
-
-    for (let day = 1; day <= daysInMonth; day++) {
-      const dateObj = new Date(y, m - 1, day);
-      const wIdx = jsDayToIndex(dateObj.getDay());
-      const dateStr = `${month}-${String(day).padStart(2, '0')}`;
-      recurring.filter((sl) => sl.day === wIdx).forEach((sl) => {
-        entries.push({ date: dateStr, start: sl.start, end: sl.end, weekday: wIdx });
-      });
-    }
-    oneOff.forEach((sl) => {
-      const wIdx = jsDayToIndex(new Date(sl.date + 'T00:00:00').getDay());
-      entries.push({ date: sl.date, start: sl.start, end: sl.end, weekday: wIdx });
-    });
-    entries.sort((a, b) => a.date.localeCompare(b.date) || a.start.localeCompare(b.start));
-  }
-
-  const totalHours = entries.reduce((sum, e) => sum + hoursBetween(e.start, e.end), 0);
-  const totalAmount = student ? totalHours * student.rate : 0;
-  const monthLabel = () => { const [y, m] = month.split('-').map(Number); return `${MONTHS_TH[m - 1]} ${y + 543}`; };
-
-  useEffect(() => {
-    if (!student || entries.length === 0 || !canvasRef.current) return;
-    drawSummaryCard(canvasRef.current, {
-      kicker: '📅  ตารางเรียน',
-      title: student.name,
-      subtitle: `เดือน${monthLabel()}`,
-      rows: entries.map((e) => ({ left: `${WEEKDAY_ABBR[e.weekday]} ${fmtDateThai(e.date)}`, right: `${e.start}–${e.end}` })),
-      footerSmall: `รวม ${entries.length} ครั้ง (${fmtHours(totalHours)} ชม.)`,
-      footerBig: `ค่าเรียนโดยประมาณ ${fmtMoney(totalAmount)}`,
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [studentId, month, schedule, students]);
-
-  const message = student && entries.length > 0
-    ? `📅 ตารางเรียน ${student.name} เดือน${monthLabel()}\n` +
-      entries.map((e) => `- ${WEEKDAY_ABBR[e.weekday]} ${fmtDateThai(e.date)} เวลา ${e.start}-${e.end}`).join('\n') +
-      `\nรวม ${entries.length} ครั้ง (${fmtHours(totalHours)} ชม.)\nค่าเรียนโดยประมาณ: ${fmtMoney(totalAmount)}`
-    : '';
-
-  const copyImage = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    canvas.toBlob(async (blob) => {
-      if (!blob) return;
-      try {
-        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-        showToast('คัดลอกรูปแล้ว ไปวางในแชท LINE ได้เลย');
-      } catch (e) {
-        showToast('อุปกรณ์นี้อาจไม่รองรับการคัดลอกรูป ลองดาวน์โหลดแทน');
-      }
-    });
-  };
-
-  const downloadImage = () => {
-    const canvas = canvasRef.current;
-    if (!canvas || !student) return;
-    canvas.toBlob((blob) => {
-      if (!blob) return;
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `ตารางเรียน-${student.name}-${month}.png`;
-      a.click();
-      URL.revokeObjectURL(url);
-    });
-  };
-
-  const copyText = async () => {
-    try { await navigator.clipboard.writeText(message); showToast('คัดลอกข้อความแล้ว'); }
-    catch { showToast('คัดลอกไม่สำเร็จ ลองเลือกข้อความเอง'); }
-  };
-
-  return (
-    <div>
-      <SectionTitle sub="สรุปวันเรียนทั้งเดือนจากตารางสอน เป็นรูปภาพพร้อมส่งให้ผู้ปกครองทราบล่วงหน้า">ปฏิทินเรียน</SectionTitle>
-      {students.length === 0 ? (
-        <EmptyState text="เพิ่มนักเรียนก่อนจึงจะสรุปตารางได้" />
-      ) : (
-        <>
-          <Card className="mb-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <Field label="นักเรียน">
-                <select value={studentId} onChange={(e) => setStudentId(e.target.value)} style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg">
-                  {students.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </select>
-              </Field>
-              <Field label="เดือน">
-                <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg" />
-              </Field>
-            </div>
-          </Card>
-
-          {entries.length === 0 ? (
-            <EmptyState text="ไม่มีคาบสอนของนักเรียนคนนี้ในเดือนที่เลือก ลองไปตั้งตารางสอนก่อน" />
-          ) : (
-            <>
-              <div className="mb-4 overflow-x-auto flex justify-center">
-                <canvas ref={canvasRef} style={{ maxWidth: '100%', height: 'auto', borderRadius: '20px' }} />
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <button onClick={copyImage} style={{ background: C.pine, color: C.paper }} className="flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-lg">
-                  <Copy size={15} /> คัดลอกรูป
-                </button>
-                <button onClick={downloadImage} style={{ border: `1px solid ${C.line}`, color: C.inkSoft }} className="flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-lg">
-                  <Download size={15} /> ดาวน์โหลดรูป
-                </button>
-                <button onClick={copyText} style={{ color: C.inkSoft }} className="text-sm font-medium px-3 py-2 underline">
-                  คัดลอกเป็นข้อความแทน
-                </button>
-              </div>
-            </>
-          )}
-        </>
-      )}
     </div>
   );
 }
 
 // ---------- Sessions log ----------
-function SessionsTab({ students, sessions, updateSessions, getStudent, showToast }) {
+function SessionsTab({ students, sessions, updateSessions, getStudent, showToast, recordRequest, clearRecordRequest }) {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
     studentId: '', date: todayStr(), hours: '1',
-    subject: '', topic: '', performance: '', score: '', stuck: '', homework: '', note: ''
+    subject: '', topic: '', performance: '', score: '', stuck: '', homework: '', note: '', sourceSlotId: undefined
   });
 
   const sorted = [...sessions].sort((a, b) => b.date.localeCompare(a.date));
   const student = getStudent(form.studentId);
+
+  useEffect(() => {
+    if (!recordRequest?.slot) return;
+    const requestedStudent = getStudent(recordRequest.slot.studentId);
+    if (!requestedStudent) { clearRecordRequest?.(); return; }
+    setForm({ studentId: requestedStudent.id, date: recordRequest.date || todayStr(), hours: String(hoursBetween(recordRequest.slot.start, recordRequest.slot.end)), subject: (requestedStudent.subjects || [])[0] || '', topic: '', performance: '', score: '', stuck: '', homework: '', note: '', sourceSlotId: recordRequest.slot.id });
+    setShowForm(true);
+    clearRecordRequest?.();
+  }, [recordRequest, getStudent, clearRecordRequest]);
 
   const resetForm = () => setForm({
     studentId: '', date: todayStr(), hours: '1',
@@ -1606,7 +1345,7 @@ function SessionsTab({ students, sessions, updateSessions, getStudent, showToast
       {
         id: uid(), studentId: student.id, studentName: student.name,
         date: form.date, hours: Number(form.hours), rate: student.rate,
-        note: smartNote, invoiced: false, paid: false
+        note: smartNote, invoiced: false, paid: false, sourceSlotId: form.sourceSlotId
       },
     ]);
     setShowForm(false);
@@ -1680,7 +1419,7 @@ function SessionsTab({ students, sessions, updateSessions, getStudent, showToast
               <input value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} placeholder={student?.subjects?.[0] || 'เช่น คณิตศาสตร์'} style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg" />
             </Field>
             <Field label="เรื่องที่สอน">
-              <textarea rows={2} value={form.topic} onChange={(e) => setForm({ ...form, topic: e.target.value })} placeholder="ระบุหัวข้อย่อยหรือเนื้อหาที่เรียน พิมพ์ได้หลายบรรทัด" style={{ ...inputStyle, resize: "vertical", lineHeight: 1.75 }} className="w-full text-sm px-3 py-3 rounded-xl min-h-20 focus:outline-none focus:ring-2 focus:ring-emerald-700/20" />
+              <textarea autoFocus rows={2} value={form.topic} onChange={(e) => setForm({ ...form, topic: e.target.value })} placeholder="ระบุหัวข้อย่อยหรือเนื้อหาที่เรียน พิมพ์ได้หลายบรรทัด" style={{ ...inputStyle, resize: "vertical", lineHeight: 1.75 }} className="w-full text-base px-3 py-3 rounded-xl min-h-20 focus:outline-none focus:ring-2 focus:ring-emerald-700/20" />
             </Field>
             <Field label="ผลการเรียน / ทำได้แค่ไหน">
               <textarea rows={2} value={form.performance} onChange={(e) => setForm({ ...form, performance: e.target.value })} placeholder="นักเรียนทำอะไรได้แล้วบ้าง มีจุดไหนที่ทำได้ดีขึ้น" style={{ ...inputStyle, resize: "vertical", lineHeight: 1.75 }} className="w-full text-sm px-3 py-3 rounded-xl min-h-20 focus:outline-none focus:ring-2 focus:ring-emerald-700/20" />
@@ -1899,9 +1638,9 @@ function Field({ label, children }) {
 
 function Modal({ title, children, onClose }) {
   return (
-    <div className="fixed inset-0 z-40 flex items-end sm:items-center justify-center p-0 sm:p-4" style={{ background: 'rgba(35,40,43,0.4)' }} onClick={onClose}>
+    <div className="fixed inset-0 z-40 flex items-end sm:items-center justify-center p-0 sm:p-4" style={{ background: 'rgba(35,40,43,0.4)' }}>
       <div
-        style={{ background: C.surface, maxHeight: '90vh' }}
+        style={{ background: C.surface, maxHeight: '90dvh', paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom))', overscrollBehavior: 'contain' }}
         className="w-full sm:max-w-lg rounded-t-2xl sm:rounded-2xl p-5 sm:p-6 overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
