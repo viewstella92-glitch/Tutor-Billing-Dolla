@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase';
 import ParentReportCard from './ParentReportCard';
 import InvoiceCard, { T as INVOICE_T } from './InvoiceCard';
 import MonthlyPlanner from './MonthlyPlanner';
+import ScheduleTable from './ScheduleTable';
 import SettingsPanel from './SettingsPanel';
 import Dashboard from './Dashboard';
 import { OWNER_ID as FORECAST_OWNER_ID } from '../lib/forecast';
@@ -295,7 +296,7 @@ export default function App() {
         {tab === 'business' && <BusinessIntelligence students={students} sessions={sessions} schedule={schedule} />}
         {tab === 'plan' && <MonthlyPlanner students={students} schedule={schedule} sessions={sessions} exceptions={exceptions} updateExceptions={updateExceptions} showToast={showToast} lang={lang} setTab={setTab} onOpenLessonForm={(slot, date) => { setRecordRequest({ slot, date }); setTab('sessions'); }} />}
         {tab === 'schedule' && (
-          <ScheduleTab students={students} schedule={schedule} updateSchedule={updateSchedule} sessions={sessions} updateSessions={updateSessions} getStudent={getStudent} showToast={showToast} onOpenLessonForm={(slot, date) => { setRecordRequest({ slot, date }); setTab('sessions'); }} />
+          <ScheduleTable students={students} schedule={schedule} updateSchedule={updateSchedule} showToast={showToast} />
         )}
         {tab === 'sessions' && (
           <SessionsTab students={students} sessions={sessions} updateSessions={updateSessions} getStudent={getStudent} showToast={showToast} recordRequest={recordRequest} clearRecordRequest={() => setRecordRequest(null)} />
@@ -1221,161 +1222,6 @@ function LessonPlanner({ student, sessions, duration, setDuration, onClose }) {
 }
 
 // ---------- Schedule ----------
-function ScheduleTab({ students, schedule, updateSchedule, sessions, updateSessions, getStudent, showToast, onOpenLessonForm }) {
-  const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ studentId: '', recurring: true, day: 0, date: todayStr(), start: '16:00', end: '17:30' });
-
-  const addSlot = () => {
-    if (!form.studentId) return;
-    const slot = {
-      id: uid(),
-      studentId: form.studentId,
-      recurring: form.recurring,
-      day: form.recurring ? Number(form.day) : undefined,
-      date: form.recurring ? undefined : form.date,
-      start: form.start,
-      end: form.end,
-    };    updateSchedule([...schedule, slot]);
-    setShowForm(false);  };
-
-  const removeSlot = (id) => {
-    if (!confirm('ลบคาบนี้ออกจากตาราง?')) return;
-    updateSchedule(schedule.filter((s) => s.id !== id), [id]);
-  };
-
-  const openConfirm = (slot, date) => {
-    onOpenLessonForm?.(slot, date);
-  };
-
-  const recurringSlots = schedule.filter((s) => s.recurring);
-  const oneOffSlots = [...schedule.filter((s) => !s.recurring)].sort((a, b) => a.date.localeCompare(b.date));
-
-  return (
-    <div>
-      <div className="flex items-center justify-between mb-5">
-        <SectionTitle sub="ตารางประจำสัปดาห์และคาบสอนแบบครั้งเดียว">ตารางสอน</SectionTitle>
-        <button
-          onClick={() => setShowForm(true)}
-          disabled={students.length === 0}
-          style={{ background: C.pine, color: C.paper }}
-          className="flex items-center gap-1.5 text-sm font-medium px-3 py-2 rounded-lg h-fit disabled:opacity-40"
-        >
-          <Plus size={16} /> เพิ่มคาบ
-        </button>
-      </div>
-
-      {students.length === 0 && <EmptyState text="เพิ่มนักเรียนก่อน แล้วค่อยมาตั้งตารางสอน" />}
-
-      {students.length > 0 && (
-        <>
-          <div className="font-medium text-sm mb-3" style={{ color: C.inkSoft }}>ตารางประจำ</div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
-            {DAY_NAMES.map((dayName, idx) => {
-              const slots = recurringSlots.filter((s) => s.day === idx).sort((a, b) => a.start.localeCompare(b.start));
-              return (
-                <Card key={idx} style={{ background: idx === jsDayToIndex(new Date().getDay()) ? C.pineTint : C.surface }}>
-                  <div className="text-sm font-medium mb-2">{dayName}</div>
-                  {slots.length === 0 && <div style={{ color: C.inkSoft }} className="text-xs">ไม่มีคาบ</div>}
-                  <div className="flex flex-col gap-2">
-                    {slots.map((slot) => {
-                      const student = getStudent(slot.studentId);
-                      const loggedToday = sessions.some((s) => s.sourceSlotId === slot.id && s.date === todayStr());
-                      return (
-                        <div key={slot.id} style={{ borderBottom: `1px dashed ${C.line}` }} className="pb-2">
-                          <div className="text-sm">{student?.name || 'ไม่ทราบชื่อ'}</div>
-                          <div style={{ color: C.inkSoft }} className="text-xs mb-1">{slot.start}–{slot.end}</div>
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => openConfirm(slot, todayStr())}
-                              disabled={idx !== jsDayToIndex(new Date().getDay()) || loggedToday}
-                              style={{ color: C.pineDark }}
-                              className="text-xs font-medium disabled:opacity-30"
-                            >
-                              {loggedToday ? 'บันทึกวันนี้แล้ว' : 'สอนแล้ว ✓'}
-                            </button>
-                            <button onClick={() => removeSlot(slot.id)} style={{ color: C.brick }} className="text-xs">ลบ</button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </Card>
-              );
-            })}
-          </div>
-
-          <div className="font-medium text-sm mb-3" style={{ color: C.inkSoft }}>คาบครั้งเดียว (ไม่ประจำ)</div>
-          {oneOffSlots.length === 0 && <EmptyState text="ไม่มีคาบสอนแบบครั้งเดียวที่ตั้งไว้" />}
-          <div className="flex flex-col gap-2">
-            {oneOffSlots.map((slot) => {
-              const student = getStudent(slot.studentId);
-              const logged = sessions.some((s) => s.sourceSlotId === slot.id && s.date === slot.date);
-              return (
-                <Card key={slot.id} className="flex items-center justify-between">
-                  <div>
-                    <div className="text-sm font-medium">{student?.name || 'ไม่ทราบชื่อ'}</div>
-                    <div style={{ color: C.inkSoft }} className="text-xs">{fmtDateThai(slot.date)} · {slot.start}–{slot.end}</div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={() => openConfirm(slot, slot.date)}
-                      disabled={logged}
-                      style={logged ? { color: C.pine } : { background: C.pineTint, color: C.pineDark }}
-                      className="text-xs font-medium px-3 py-1.5 rounded-lg"
-                    >
-                      {logged ? 'บันทึกแล้ว' : 'สอนแล้ว ✓'}
-                    </button>
-                    <button onClick={() => removeSlot(slot.id)} style={{ color: C.brick }} className="p-1"><Trash2 size={15} /></button>
-                  </div>
-                </Card>
-              );
-            })}
-          </div>
-        </>
-      )}
-
-      {showForm && (
-        <Modal onClose={() => setShowForm(false)} title="เพิ่มคาบสอน">
-          <Field label="นักเรียน">
-            <select value={form.studentId} onChange={(e) => setForm({ ...form, studentId: e.target.value })} style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg">
-              <option value="">เลือกนักเรียน</option>
-              {students.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
-          </Field>
-          <Field label="รูปแบบ">
-            <div className="flex gap-2">
-              <button onClick={() => setForm({ ...form, recurring: true })} style={form.recurring ? { background: C.pineTint, color: C.pineDark } : { color: C.inkSoft, border: `1px solid ${C.line}` }} className="flex-1 text-sm py-2 rounded-lg font-medium">ประจำทุกสัปดาห์</button>
-              <button onClick={() => setForm({ ...form, recurring: false })} style={!form.recurring ? { background: C.pineTint, color: C.pineDark } : { color: C.inkSoft, border: `1px solid ${C.line}` }} className="flex-1 text-sm py-2 rounded-lg font-medium">ครั้งเดียว</button>
-            </div>
-          </Field>
-          {form.recurring ? (
-            <Field label="วัน">
-              <select value={form.day} onChange={(e) => setForm({ ...form, day: e.target.value })} style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg">
-                {DAY_NAMES.map((d, i) => <option key={i} value={i}>{d}</option>)}
-              </select>
-            </Field>
-          ) : (
-            <Field label="วันที่">
-              <input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg" />
-            </Field>
-          )}
-          <div className="flex gap-3">
-            <Field label="เวลาเริ่ม">
-              <input type="time" value={form.start} onChange={(e) => setForm({ ...form, start: e.target.value })} style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg" />
-            </Field>
-            <Field label="เวลาจบ">
-              <input type="time" value={form.end} onChange={(e) => setForm({ ...form, end: e.target.value })} style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg" />
-            </Field>
-          </div>
-          <ModalActions onCancel={() => setShowForm(false)} onSave={addSlot} />
-        </Modal>
-      )}
-
-
-    </div>
-  );
-}
-
 // ---------- Sessions log ----------
 function SessionsTab({ students, sessions, updateSessions, getStudent, showToast, recordRequest, clearRecordRequest }) {
   const [showForm, setShowForm] = useState(false);
