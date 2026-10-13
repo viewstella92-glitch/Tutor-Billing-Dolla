@@ -716,9 +716,10 @@ function StudentsTab({ students, updateStudents, sessions }) {
 
 // ---------- Parent Report ----------
 function ParentReport({ student, sessions, onClose }) {
+  const reportRef = useRef(null);
   const history = sessions.filter(x => x.studentId === student.id).sort((a,b) => a.date.localeCompare(b.date));
   const scores = history.map(x => {
-    const m = (x.note || '').match(/คะแนน[:： ]*(\d+(?:\\.\d+)?)/);
+    const m = (x.note || '').match(/คะแนน[:： ]*(\d+(?:\.\d+)?)/);
     return m ? Number(m[1]) : null;
   }).filter(Number.isFinite);
   const current = student.latestScore !== '' && student.latestScore != null ? Number(student.latestScore) : (scores.length ? scores[scores.length - 1] : null);
@@ -726,70 +727,159 @@ function ParentReport({ student, sessions, onClose }) {
   const target = student.targetScore !== '' && student.targetScore != null ? Number(student.targetScore) : null;
   const change = current != null && baseline != null ? current - baseline : null;
   const recent = history.slice(-3).reverse();
-
+  const [mascot, setMascot] = useState('🌱');
+  const [tutorNote, setTutorNote] = useState('');
+  const [homework, setHomework] = useState(student.weaknesses ? 'ฝึกทบทวนเรื่อง ' + student.weaknesses : '');
+  const [nextTopic, setNextTopic] = useState(student.goals || '');
+  const [nextDate, setNextDate] = useState('');
+  const [nextTime, setNextTime] = useState('');
+  const [month, setMonth] = useState(todayStr().slice(0,7));
+  const monthLabel = (() => { const [y,m] = month.split('-').map(Number); return MONTHS_TH[m-1]?.replace('.','') + ' ' + (y+543); })();
+  const monthSessions = history.filter(x => x.date.slice(0,7) === month);
+  const monthHours = monthSessions.reduce((sum,x)=>sum+Number(x.hours||0),0);
+  const monthTotal = monthSessions.reduce((sum,x)=>sum+Number(x.hours||0)*Number(x.rate||0),0);
+  const allTopics = [...new Set(history.flatMap(x => (x.note || '').split(/[\n,;；。]/).map(t=>t.trim()).filter(t=>t && !/คะแนน[:： ]*\d/.test(t) && t.length<70)))];
+  const mastered = allTopics.filter(t => /ทำได้เอง|คล่อง|เข้าใจแล้ว|แม่น|ผ่าน/.test(t)).slice(0,4);
+  const practicing = allTopics.filter(t => /ฝึก|ทบทวน|ยัง|ผิด|จุดอ่อน|เน้น/.test(t)).slice(0,4);
+  const started = allTopics.filter(t => !mastered.includes(t) && !practicing.includes(t)).slice(0,5);
+  const topicsForChips = [
+    ...mastered.map(t=>({label:t,status:'เชี่ยวชาญแล้ว',bg:'#DCEFE2',color:'#24583C'})),
+    ...practicing.map(t=>({label:t,status:'กำลังฝึก',bg:'#FFF0D1',color:'#8A5B0C'})),
+    ...started.map(t=>({label:t,status:'เริ่มเรียนแล้ว',bg:'#E6EDF8',color:'#385B8A'}))
+  ];
   const observations = [];
-  if (change != null) observations.push(change > 0 ? `คะแนนล่าสุดเพิ่มขึ้น ${change} คะแนนจากจุดเริ่มต้น` : change < 0 ? `คะแนนล่าสุดลดลง ${Math.abs(change)} คะแนนจากจุดเริ่มต้น จึงจะเน้นหาจุดที่ยังผิดพลาด` : 'คะแนนล่าสุดยังใกล้เคียงกับจุดเริ่มต้น');
-  if (student.strengths) observations.push(`จุดแข็ง: ${student.strengths}`);
-  if (student.weaknesses) observations.push(`เรื่องที่กำลังเน้น: ${student.weaknesses}`);
-  if (!observations.length) observations.push('อยู่ระหว่างเก็บข้อมูลพัฒนาการเพิ่มเติม');
-
-  const nextSteps = [];
-  if (student.weaknesses) nextSteps.push(`ทบทวนและฝึกเรื่อง ${student.weaknesses}`);
-  if (target != null && current != null && current < target) nextSteps.push(`ค่อย ๆ เพิ่มระดับโจทย์เพื่อขยับคะแนนไปสู่เป้าหมาย ${target} คะแนน`);
-  if (student.goals) nextSteps.push(`ติดตามเป้าหมาย: ${student.goals}`);
-  if (!nextSteps.length) nextSteps.push('ติดตามผลจากแบบฝึกหัดและคะแนนในคาบถัดไป');
-
+  if (change != null) observations.push(change > 0 ? 'คะแนนล่าสุดเพิ่มขึ้น ' + change + ' คะแนนจากจุดเริ่มต้น' : change < 0 ? 'คะแนนล่าสุดลดลง ' + Math.abs(change) + ' คะแนน จึงจะเน้นทบทวนจุดที่ยังผิดพลาด' : 'คะแนนล่าสุดยังใกล้เคียงกับจุดเริ่มต้น');
+  if (student.strengths) observations.push('จุดแข็ง: ' + student.strengths);
+  if (student.weaknesses) observations.push('เรื่องที่กำลังเน้น: ' + student.weaknesses);
+  const nextSteps = [homework, nextTopic].filter(Boolean);
   const message = [
-    `📚 สรุปการเรียนของ ${student.name}`,
-    student.grade ? `ระดับชั้น: ${student.grade}` : '',
-    student.subjects?.length ? `วิชา: ${student.subjects.join(' · ')}` : '',
+    '📚 รายงานความก้าวหน้าการเรียนของ ' + student.name,
+    'ช่วงรายงาน: ' + monthLabel,
+    student.grade ? 'ระดับชั้น: ' + student.grade : '',
+    student.subjects?.length ? 'วิชา: ' + student.subjects.join(' · ') : '',
     '',
     'พัฒนาการ',
-    `• เรียนแล้ว ${history.length} คาบ`,
-    current != null ? `• คะแนนล่าสุด: ${current}${target != null ? ` / เป้าหมาย ${target}` : ''}` : '',
-    change != null ? `• เปลี่ยนแปลงจากจุดเริ่มต้น: ${change > 0 ? '+' : ''}${change} คะแนน` : '',
+    '• เรียนในเดือนนี้ ' + monthSessions.length + ' คาบ (' + fmtHours(monthHours) + ' ชั่วโมง)',
+    current != null ? '• คะแนนล่าสุด: ' + current + (target != null ? ' / เป้าหมาย ' + target : '') : '• ยังไม่มีคะแนนที่บันทึกไว้',
+    change != null ? '• เปลี่ยนแปลงจากจุดเริ่มต้น: ' + (change > 0 ? '+' : '') + change + ' คะแนน' : '',
     '',
     'สิ่งที่สังเกตได้',
-    ...observations.map(x => `• ${x}`),
+    ...(observations.length ? observations.map(x=>'• '+x) : ['• อยู่ระหว่างเก็บข้อมูลพัฒนาการเพิ่มเติม']),
+    tutorNote ? '\nข้อความจากติวเตอร์\n' + tutorNote : '',
+    nextSteps.length ? '\nสิ่งที่จะทำต่อ\n' + nextSteps.map(x=>'• '+x).join('\n') : '',
+    nextDate ? '\nคาบถัดไป: ' + nextDate + (nextTime ? ' เวลา ' + nextTime : '') : '',
     '',
-    'แนวทางคาบถัดไป',
-    ...nextSteps.map(x => `• ${x}`),
-    '',
-    'จะติดตามพัฒนาการต่อเนื่องในคาบถัดไปค่ะ'
+    'ยอดของเดือนนี้: ' + fmtMoney(monthTotal) + ' (' + fmtHours(monthHours) + ' ชั่วโมง)',
+    'ขอบคุณผู้ปกครองที่ร่วมสนับสนุนการเรียนรู้อย่างต่อเนื่องค่ะ'
   ].filter(Boolean).join('\n');
 
   const copy = async () => {
+    try { await navigator.clipboard.writeText(message); onClose(); setTimeout(() => alert('คัดลอกรายงานแล้ว'), 50); }
+    catch { alert('คัดลอกไม่สำเร็จ ลองเลือกข้อความจากรายงานเอง'); }
+  };
+  const downloadPng = async () => {
+    const source = reportRef.current;
+    if (!source) return;
     try {
-      await navigator.clipboard.writeText(message);
-      onClose();
-      setTimeout(() => alert('คัดลอกรายงานแล้ว'), 50);
-    } catch {
-      alert('คัดลอกไม่สำเร็จ ลองเลือกข้อความจากรายงานเอง');
-    }
+      const clone = source.cloneNode(true);
+      const copyStyles = (a,b) => {
+        const computed = window.getComputedStyle(a);
+        for (const prop of computed) b.style.setProperty(prop, computed.getPropertyValue(prop), computed.getPropertyPriority(prop));
+        Array.from(a.children).forEach((child,i)=>{ if(b.children[i]) copyStyles(child,b.children[i]); });
+      };
+      copyStyles(source, clone);
+      clone.style.width = '720px';
+      clone.style.maxWidth = '720px';
+      clone.style.margin = '0';
+      clone.querySelectorAll('[data-report-hide="true"]').forEach(el=>el.remove());
+      const html = new XMLSerializer().serializeToString(clone);
+      const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="720" height="' + Math.ceil(source.scrollHeight * 720 / source.scrollWidth) + '"><foreignObject width="100%" height="100%"><div xmlns="http://www.w3.org/1999/xhtml">' + html + '</div></foreignObject></svg>';
+      const blob = new Blob([svg], {type:'image/svg+xml;charset=utf-8'});
+      const url = URL.createObjectURL(blob);
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 720; canvas.height = Math.ceil(img.height * 720 / img.width);
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#FAF8F1'; ctx.fillRect(0,0,canvas.width,canvas.height); ctx.drawImage(img,0,0,canvas.width,canvas.height);
+        URL.revokeObjectURL(url);
+        const link = document.createElement('a');
+        link.download = 'รายงานความก้าวหน้า-' + student.name.replace(/[^ก-๙a-zA-Z0-9_-]/g,'_') + '.png';
+        link.href = canvas.toDataURL('image/png'); link.click();
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); alert('สร้างรูปภาพไม่สำเร็จในเบราว์เซอร์นี้ ลองใช้ดาวน์โหลด PDF แทน'); };
+      img.src = url;
+    } catch (e) { console.error(e); alert('สร้างรูปภาพไม่สำเร็จ ลองใช้ดาวน์โหลด PDF แทน'); }
+  };
+  const downloadPdf = () => {
+    const style = document.createElement('style');
+    style.id = 'parent-report-print-style';
+    style.textContent = '@media print { body * { visibility:hidden !important; } .parent-report-print-root, .parent-report-print-root * { visibility:visible !important; } .parent-report-print-root { position:absolute !important; left:0 !important; top:0 !important; width:100% !important; max-width:720px !important; margin:0 !important; box-shadow:none !important; } .no-print { display:none !important; } @page { size:A4 portrait; margin:12mm; } }';
+    document.head.appendChild(style);
+    window.print();
+    setTimeout(()=>style.remove(),1000);
   };
 
   return (
-    <Modal onClose={onClose} title={`รายงานผู้ปกครอง · ${student.name}`}>
+    <Modal onClose={onClose} title={'รายงานความก้าวหน้า · ' + student.name}>
       <div className="space-y-3">
-        <Card style={{background:C.pineTint,borderColor:C.pine}}>
-          <div style={{color:C.pineDark}} className="text-xs font-medium mb-1">สรุปการเรียน</div>
-          <div className="text-sm">{student.subjects?.length ? student.subjects.join(' · ') : 'วิชาหลัก'} · {history.length} คาบ</div>
-          {current != null && <div className="text-sm mt-1">คะแนนล่าสุด <b>{current}</b>{target != null ? ` / เป้าหมาย ${target}` : ''}</div>}
-          {change != null && <div style={{color:change >= 0 ? C.pine : C.brick}} className="text-xs mt-1">{change >= 0 ? '↑' : '↓'} {Math.abs(change)} คะแนนจากจุดเริ่มต้น</div>}
-        </Card>
-        <div>
-          <div className="font-medium text-sm mb-2">ข้อความพร้อมส่ง</div>
-          <textarea readOnly value={message} style={inputStyle} className="w-full text-sm leading-relaxed px-3 py-2 rounded-lg min-h-64" />
+        <div className="grid grid-cols-2 gap-2 no-print">
+          <Field label="เดือนที่รายงาน"><input type="month" value={month} onChange={e=>setMonth(e.target.value)} style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg"/></Field>
+          <Field label="ไอคอนประจำรายงาน"><select value={mascot} onChange={e=>setMascot(e.target.value)} style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg"><option>🌱</option><option>⭐</option><option>🚀</option><option>🦊</option><option>🐼</option><option>🌈</option></select></Field>
         </div>
-        {recent.length > 0 && <Card>
-          <div className="font-medium text-sm mb-2">ข้อมูลคาบล่าสุด</div>
-          <div className="space-y-2">{recent.map(x => <div key={x.id} className="text-xs"><div className="font-medium">{fmtDateThai(x.date)} · {fmtHours(x.hours)} ชม.</div>{x.note && <div style={{color:C.inkSoft}} className="mt-0.5">{x.note}</div>}</div>)}</div>
-        </Card>}
-        <div className="flex gap-2">
-          <button onClick={onClose} style={{border:`1px solid ${C.line}`,color:C.inkSoft}} className="flex-1 text-sm font-medium py-2.5 rounded-lg">ปิด</button>
-          <button onClick={copy} style={{background:C.pine,color:C.paper}} className="flex-1 text-sm font-medium py-2.5 rounded-lg flex items-center justify-center gap-2"><Copy size={15}/> คัดลอกข้อความ</button>
+        <div ref={reportRef} className="parent-report-print-root" style={{width:'100%',maxWidth:720,margin:'0 auto',background:'#FAF8F1',color:'#23312A',border:'1px solid #DCE5D9',borderRadius:20,overflow:'hidden',fontFamily:'Arial, sans-serif',boxShadow:'0 8px 28px rgba(32,64,47,.10)'}}>
+          <div style={{background:'linear-gradient(135deg,#20402F,#2E684B)',color:'#fff',padding:'24px 24px 22px',position:'relative'}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:12}}>
+              <div><div style={{fontSize:12,letterSpacing:1.5,opacity:.85}}>LEARNING PROGRESS REPORT</div><div style={{fontSize:26,fontWeight:800,marginTop:8,lineHeight:1.25}}>รายงานความก้าวหน้า</div><div style={{fontSize:18,marginTop:8}}>{student.name}</div><div style={{fontSize:13,opacity:.9,marginTop:5}}>{[student.grade,student.subjects?.join(' · ')].filter(Boolean).join('  •  ') || 'บันทึกการเรียนรู้รายบุคคล'}</div></div>
+              <div style={{textAlign:'right',minWidth:74}}><div style={{fontSize:34}}>{mascot}</div><div style={{background:'#FFFFFF20',border:'1px solid #FFFFFF50',borderRadius:999,padding:'6px 10px',fontSize:12,whiteSpace:'nowrap'}}>{monthLabel}</div></div>
+            </div>
+          </div>
+          <div style={{padding:20,display:'grid',gap:14}}>
+            <div style={{background:'#fff',border:'1px solid #E1E7DE',borderRadius:15,padding:16}}>
+              <div style={{fontSize:13,fontWeight:700,color:'#2E684B',marginBottom:10}}>📈 พัฒนาการของคะแนน</div>
+              {current == null ? <div style={{fontSize:13,color:'#66736A',padding:'8px 0'}}>ยังไม่มีคะแนนที่บันทึกไว้ — เพิ่มคะแนนในโน้ตคาบเรียนรูปแบบ “คะแนน: 75” เพื่อแสดงกราฟความก้าวหน้า</div> : <>
+                <div style={{display:'flex',justifyContent:'space-between',gap:10,alignItems:'end',marginBottom:8}}><div><div style={{fontSize:11,color:'#66736A'}}>คะแนนล่าสุด</div><div style={{fontSize:30,fontWeight:800,color:'#20402F'}}>{current}<span style={{fontSize:13,fontWeight:500}}> / 100</span></div></div><div style={{textAlign:'right'}}><div style={{fontSize:11,color:'#66736A'}}>คะแนนตั้งต้น {baseline == null ? '—' : baseline}</div>{target != null && <div style={{fontSize:12,color:'#A8781F',fontWeight:700}}>🏁 เป้าหมาย {target}</div>}</div></div>
+                <div style={{height:15,background:'#E7EDE5',borderRadius:99,position:'relative',overflow:'visible'}}><div style={{height:'100%',width:Math.max(0,Math.min(100,current))+'%',background:'linear-gradient(90deg,#6FA77A,#2E684B)',borderRadius:99}}></div>{target != null && <div style={{position:'absolute',left:Math.max(0,Math.min(100,target))+'%',top:-5,width:3,height:25,background:'#C08A2B',borderRadius:2}}></div>}</div>
+                <div style={{display:'flex',justifyContent:'space-between',fontSize:10,color:'#78847A',marginTop:5}}><span>0</span><span>{target != null ? '🏁 เป้าหมาย ' + target : '100 คะแนน'}</span><span>100</span></div>
+                {change != null && <div style={{marginTop:12,display:'inline-block',background:change>=0?'#E0F0E4':'#F8E5E1',color:change>=0?'#24583C':'#A0392A',padding:'6px 10px',borderRadius:999,fontSize:12,fontWeight:700}}>{change>=0?'↗':'↘'} {change>0?'+':''}{change} คะแนนจากตอนเริ่มเรียน</div>}
+              </>}
+            </div>
+            <div style={{background:'#fff',border:'1px solid #E1E7DE',borderRadius:15,padding:16}}>
+              <div style={{fontSize:13,fontWeight:700,color:'#2E684B',marginBottom:10}}>🧩 ทักษะและหัวข้อที่เรียน</div>
+              {topicsForChips.length ? <div style={{display:'flex',flexWrap:'wrap',gap:7}}>{topicsForChips.map((t,i)=><span key={i} title={t.status} style={{background:t.bg,color:t.color,borderRadius:999,padding:'6px 10px',fontSize:11,fontWeight:600}}>{t.status} · {t.label}</span>)}</div> : <div style={{fontSize:12,color:'#78847A'}}>เพิ่มหัวข้อหรือความคืบหน้าไว้ในโน้ตคาบเรียน เพื่อแสดงทักษะในส่วนนี้</div>}
+              <div style={{display:'flex',gap:10,flexWrap:'wrap',fontSize:10,color:'#66736A',marginTop:12}}><span>🟢 เชี่ยวชาญแล้ว</span><span>🟡 กำลังฝึก</span><span>🔵 เริ่มเรียนแล้ว</span></div>
+            </div>
+            <div style={{background:'#fff',border:'1px solid #E1E7DE',borderRadius:15,padding:16}}>
+              <div style={{fontSize:13,fontWeight:700,color:'#2E684B',marginBottom:10}}>🗓️ 3 คาบล่าสุด</div>
+              {recent.length ? <div style={{display:'grid',gap:10}}>{recent.map((x,i)=><div key={x.id} style={{display:'grid',gridTemplateColumns:'18px 1fr',gap:9}}><div style={{display:'flex',flexDirection:'column',alignItems:'center'}}><div style={{width:12,height:12,borderRadius:99,background:'#2E684B',border:'3px solid #DCEBDD'}}></div>{i<recent.length-1&&<div style={{width:2,flex:1,minHeight:22,background:'#DCE5D9'}}></div>}</div><div style={{paddingBottom:5}}><div style={{fontSize:11,fontWeight:700,color:'#2E684B'}}>{fmtDateThai(x.date)} · {fmtHours(x.hours)} ชม.</div><div style={{fontSize:12,marginTop:4,whiteSpace:'pre-wrap',lineHeight:1.5}}>{x.note || 'ฝึกทำแบบฝึกหัดและทบทวนบทเรียน'}</div><div style={{fontSize:11,color:'#A8781F',marginTop:4}}>✦ ขอบคุณที่ตั้งใจเรียนและพยายามอย่างต่อเนื่อง</div></div></div>)}</div> : <div style={{fontSize:12,color:'#78847A'}}>ยังไม่มีประวัติคาบเรียน</div>}
+            </div>
+            <div style={{background:'#F0F5EE',border:'1px dashed #B8CCB8',borderRadius:15,padding:16}}>
+              <div style={{fontSize:13,fontWeight:700,color:'#2E684B',marginBottom:8}}>💌 ข้อความจากติวเตอร์</div>
+              <div style={{fontSize:12,lineHeight:1.7,whiteSpace:'pre-wrap'}}>{tutorNote || 'ขอบคุณผู้ปกครองที่ช่วยสนับสนุนการเรียนของน้องอย่างต่อเนื่องนะคะ เราจะค่อย ๆ พัฒนาทักษะไปด้วยกันค่ะ'}</div>
+            </div>
+            <div style={{background:'#fff',border:'1px solid #E1E7DE',borderRadius:15,padding:16}}>
+              <div style={{fontSize:13,fontWeight:700,color:'#2E684B',marginBottom:8}}>🎒 สิ่งที่จะทำในคาบหน้า</div>
+              <div style={{fontSize:12,lineHeight:1.7}}>{homework ? '• การบ้าน/ทบทวน: ' + homework : '• การบ้าน/ทบทวน: ยังไม่ได้ระบุ'}<br/>{nextTopic ? '• หัวข้อถัดไป: ' + nextTopic : '• หัวข้อถัดไป: กำหนดตามพัฒนาการของน้อง'}<br/>{nextDate ? '• นัดหมาย: ' + fmtDateThai(nextDate) + (nextTime ? ' เวลา ' + nextTime : '') : ''}</div>
+            </div>
+            <div style={{borderTop:'2px dashed #B8C7B7',paddingTop:14,display:'flex',justifyContent:'space-between',alignItems:'center',gap:12}}>
+              <div><div style={{fontSize:12,fontWeight:800,color:'#2E684B'}}>✂ ยอดของเดือนนี้</div><div style={{fontSize:10,color:'#78847A',marginTop:4}}>{monthSessions.length} คาบ · {fmtHours(monthHours)} ชั่วโมง</div><div style={{fontSize:10,color:'#78847A',marginTop:3}}>ขอบคุณที่ไว้วางใจให้เราดูแลการเรียนรู้ค่ะ</div></div>
+              <div style={{textAlign:'right',borderLeft:'1px dashed #B8C7B7',paddingLeft:16}}><div style={{fontSize:10,color:'#78847A'}}>ยอดรวม</div><div style={{fontSize:24,fontWeight:800,color:'#20402F'}}>{fmtMoney(monthTotal)}</div></div>
+            </div>
+          </div>
         </div>
-        <div style={{color:C.inkSoft}} className="text-xs">รายงานนี้สร้างจากข้อมูลโปรไฟล์และประวัติการสอนที่บันทึกไว้ในระบบ</div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 no-print">
+          <Field label="ข้อความส่วนตัวจากติวเตอร์"><textarea value={tutorNote} onChange={e=>setTutorNote(e.target.value)} placeholder="เช่น วันนี้น้องทำโจทย์กราฟได้เองแล้ว ดีใจมากค่ะ" style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg min-h-20"/></Field>
+          <Field label="การบ้าน / สิ่งที่อยากให้ทบทวน"><textarea value={homework} onChange={e=>setHomework(e.target.value)} style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg min-h-20"/></Field>
+          <Field label="หัวข้อคาบถัดไป"><input value={nextTopic} onChange={e=>setNextTopic(e.target.value)} style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg"/></Field>
+          <div className="grid grid-cols-2 gap-2"><Field label="วันนัดครั้งถัดไป"><input type="date" value={nextDate} onChange={e=>setNextDate(e.target.value)} style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg"/></Field><Field label="เวลา"><input type="time" value={nextTime} onChange={e=>setNextTime(e.target.value)} style={inputStyle} className="w-full text-sm px-3 py-2 rounded-lg"/></Field></div>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 no-print">
+          <button onClick={downloadPng} style={{background:C.pine,color:C.paper}} className="text-sm font-semibold py-2.5 rounded-lg flex items-center justify-center gap-2"><Download size={16}/> ดาวน์โหลดรูปภาพ 720 px</button>
+          <button onClick={downloadPdf} style={{background:C.gold,color:'#fff'}} className="text-sm font-semibold py-2.5 rounded-lg flex items-center justify-center gap-2"><Download size={16}/> ดาวน์โหลด PDF / พิมพ์</button>
+          <button onClick={copy} style={{border:'1px solid '+C.line,color:C.inkSoft}} className="text-sm font-medium py-2.5 rounded-lg flex items-center justify-center gap-2"><Copy size={15}/> คัดลอกข้อความส่ง LINE</button>
+          <button onClick={onClose} style={{border:'1px solid '+C.line,color:C.inkSoft}} className="text-sm font-medium py-2.5 rounded-lg">ปิดรายงาน</button>
+        </div>
+        <div className="text-xs no-print" style={{color:C.inkSoft}}>คะแนนอ่านจากโปรไฟล์นักเรียนและโน้ตคาบเรียนรูปแบบ “คะแนน: 75” · รูปภาพขนาด 720 px · PDF ใช้หน้าต่างพิมพ์ของเบราว์เซอร์และเลือก “บันทึกเป็น PDF”</div>
       </div>
     </Modal>
   );
