@@ -25,7 +25,7 @@ export default function MonthlyPlanner({ students=[], schedule=[], sessions=[], 
   const labels = T[lang] || T.th;
   const today = todayKey();
   const model = useMemo(()=>buildMonthlyForecast({month,students,schedule,sessions,exceptions,today}),[month,students,schedule,sessions,exceptions,today]);
-  const chart = useMemo(()=>buildNineMonthChart({month,students,schedule,sessions,exceptions,today}),[month,students,schedule,sessions,exceptions,today]);
+  const chart = useMemo(()=>buildNineMonthChart({month,students,schedule,sessions,exceptions,today,lang}),[month,students,schedule,sessions,exceptions,today]);
   const activeStudents = students.filter(s=>(s.status||'active')==='active');
   const visibleRows = model.rows.filter(row=>studentFilter==='all'||row.studentId===studentFilter);
   const [year,monthNum] = month.split('-').map(Number);
