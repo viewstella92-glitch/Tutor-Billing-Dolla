@@ -188,7 +188,7 @@ export default function ParentReportCard({ student, sessions = [], month: initia
             <div className="text-xs opacity-80">รายงานสำหรับผู้ปกครอง</div>
             <h3 className="mt-2 break-words text-2xl sm:text-3xl font-bold">{student.name}</h3>
             <div className="mt-2 text-sm opacity-90 break-words">{[student.grade,...(student.subjects||[])].filter(Boolean).join(' · ') || 'บันทึกการเรียนรู้รายบุคคล'}</div>
-            <div className="mt-3 inline-flex rounded-full px-3 py-1 text-xs" style={{background:'rgba(255,255,255,.15) }}>{monthLabelOf(month)}</div>
+            <div className="mt-3 inline-flex rounded-full px-3 py-1 text-xs" style={{background:'rgba(255,255,255,.15)'}}>{monthLabelOf(month)}</div>
           </header>
           <div className="space-y-3 p-3 sm:p-5">
             <section className="rounded-xl border p-4" style={{borderColor:C.line}}>
