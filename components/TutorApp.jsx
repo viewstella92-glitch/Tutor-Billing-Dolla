@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import ParentReportCard from './ParentReportCard';
 import InvoiceCard from './InvoiceCard';
+import WeeklyPlanner from './WeeklyPlanner';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import {
   LayoutDashboard, Users, CalendarDays, ClipboardList, Receipt, Download,
@@ -151,6 +152,7 @@ export default function App() {
     { id: 'business', label: 'ธุรกิจ', icon: BarChart },
     { id: 'students', label: 'นักเรียน', icon: Users },
     { id: 'schedule', label: 'ตารางสอน', icon: CalendarDays },
+    { id: 'plan', label: 'แพลนสัปดาห์', icon: CalendarDays },
     { id: 'sessions', label: 'บันทึกคาบสอน', icon: ClipboardList },
     { id: 'invoice', label: 'แจ้งค่าสอน', icon: Receipt },
     { id: 'export', label: 'ส่งออกข้อมูล', icon: Download },
@@ -220,6 +222,7 @@ export default function App() {
         {tab === 'progress' && <ProgressIntelligence students={students} sessions={sessions} />}
         {tab === 'alerts' && <SmartAlerts students={students} sessions={sessions} schedule={schedule} />}
         {tab === 'business' && <BusinessIntelligence students={students} sessions={sessions} schedule={schedule} />}
+        {tab === 'plan' && <WeeklyPlanner students={students} schedule={schedule} sessions={sessions} showToast={showToast} onOpenLessonForm={(slot, date) => { setRecordRequest({ slot, date }); setTab('sessions'); }} />}
         {tab === 'schedule' && (
           <ScheduleTab students={students} schedule={schedule} updateSchedule={updateSchedule} sessions={sessions} updateSessions={updateSessions} getStudent={getStudent} showToast={showToast} onOpenLessonForm={(slot, date) => { setRecordRequest({ slot, date }); setTab('sessions'); }} />
         )}
