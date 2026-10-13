@@ -55,7 +55,7 @@ function wrapText(ctx, text, maxWidth) {
   return lines;
 }
 
-export default function ParentReportCard({ student, sessions = [], month: initialMonth, tutorMessage: initialTutorMessage }) {
+export default function ParentReportCard({ student, sessions = [], month: initialMonth, tutorMessage: initialTutorMessage, onClose }) {
   const canvasRef = useRef(null);
   const [month, setMonth] = useState(initialMonth || todayStr().slice(0,7));
   const [tutorMessage, setTutorMessage] = useState(initialTutorMessage || 'วันนี้น้องตั้งใจเรียนและค่อย ๆ พัฒนาขึ้นค่ะ');
