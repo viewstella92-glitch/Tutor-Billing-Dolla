@@ -296,7 +296,7 @@ export default function App() {
         {tab === 'business' && <BusinessIntelligence students={students} sessions={sessions} schedule={schedule} />}
         {tab === 'plan' && <MonthlyPlanner students={students} schedule={schedule} sessions={sessions} exceptions={exceptions} updateExceptions={updateExceptions} showToast={showToast} lang={lang} setTab={setTab} onOpenLessonForm={(slot, date) => { setRecordRequest({ slot, date }); setTab('sessions'); }} />}
         {tab === 'schedule' && (
-          <ScheduleTable students={students} schedule={schedule} updateSchedule={updateSchedule} showToast={showToast} />
+          <ScheduleTable students={students} schedule={schedule} updateSchedule={updateSchedule} showToast={showToast} onOpenLessonForm={(slot, date) => { setRecordRequest({ slot, date }); setTab('sessions'); }} />
         )}
         {tab === 'sessions' && (
           <SessionsTab students={students} sessions={sessions} updateSessions={updateSessions} getStudent={getStudent} showToast={showToast} recordRequest={recordRequest} clearRecordRequest={() => setRecordRequest(null)} />
