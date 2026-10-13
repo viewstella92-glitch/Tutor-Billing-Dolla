@@ -177,7 +177,7 @@ export default function ParentReportCard({ student, sessions = [], month: initia
 
   if (!student) return null;
   return (
-    <section className="w-full min-w-0 space-y-4 text-sm" style={{color:C.ink}}>
+    <div className="fixed inset-0 z-50 overflow-y-auto p-2 sm:p-6" style={{background:"rgba(35,40,43,.55)"}}><div className="mx-auto max-w-3xl rounded-2xl p-3 sm:p-5 shadow-xl" style={{background:C.paper}}><section className="w-full min-w-0 space-y-4 text-sm" style={{color:C.ink}}>
       <div className="flex flex-wrap items-center justify-between gap-3"><button type="button" onClick={onClose} className="rounded-lg border px-3 py-2 text-xs" style={{borderColor:C.line,color:C.ink}}>ปิดรายงาน</button>
         <div><h2 className="text-lg font-semibold">รายงานความก้าวหน้า · {student.name}</h2><p style={{color:C.inkSoft}} className="text-xs mt-1">การ์ดสำหรับส่งให้ผู้ปกครองทาง LINE</p></div>
         <label className="flex items-center gap-2 text-xs"><CalendarDays size={15}/><span>เดือนที่รายงาน</span><input aria-label="เดือนที่รายงาน" type="month" value={month} onChange={e=>setMonth(e.target.value)} className="max-w-[150px] rounded-lg border px-2 py-2" style={{borderColor:C.line,background:C.surface}} /></label>
@@ -231,6 +231,6 @@ export default function ParentReportCard({ student, sessions = [], month: initia
         {copyStatus&&<p role="status" className="text-xs" style={{color:C.pine}}>{copyStatus}</p>}
       </div>
       <canvas ref={canvasRef} className="sr-only" aria-hidden="true" />
-    </section>
+    </section></div></div>
   );
 }
