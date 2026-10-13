@@ -1563,7 +1563,7 @@ function InvoiceTab({ students, sessions, invoices=[], settings={}, lang='th', o
   invoices.forEach(inv=>(inv.session_ids||[]).forEach(id=>invoiceForSession.set(id,inv)));
   const inRange = sessions.filter(s=>s.studentId===studentId&&s.date>=dateFrom&&s.date<=dateTo).sort((a,b)=>a.date.localeCompare(b.date));
   const candidates = inRange.filter(s=>!s.invoiced&&!invoiceForSession.has(s.id));
-  useEffect(()=>{setSelected(new Set(candidates.map(s=>s.id)));setSelectedInvoiceId('');},[studentId,dateFrom,dateTo,sessions.length,invoices.length]);
+  useEffect(()=>{setSelected(new Set(candidates.map(s=>s.id)));setSelectedInvoiceId('');},[studentId,dateFrom,dateTo,sessions.length]);
   const chosen = candidates.filter(s=>selected.has(s.id));
   const openedInvoice = invoices.find(i=>i.id===selectedInvoiceId);
   const invoiceSessions = openedInvoice ? (openedInvoice.session_ids||[]).map(id=>sessions.find(s=>s.id===id)).filter(Boolean) : [];
