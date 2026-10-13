@@ -313,7 +313,7 @@ function ProgressIntelligence({ students, sessions }) {
           </div>
           {chartData.length<2 ? <EmptyState text="ต้องมีคะแนนอย่างน้อย 2 คาบ จึงจะแสดงแนวโน้ม"/> :
             <div className="h-56"><ResponsiveContainer width="100%" height="100%"><BarChart data={chartData} margin={{top:8,right:8,left:-20,bottom:0}}><CartesianGrid strokeDasharray="3 3"/><XAxis dataKey="date"/><YAxis domain={[0,100]}/><Tooltip formatter={(value)=>[value,'คะแนน']}/><Bar dataKey="score" fill={C.pine} radius={[4,4,0,0]}/></BarChart></ResponsiveContainer></div>}
-        </Card>
+        </Card>}
         <div className="space-y-2">{rows.map(s=><Card key={s.id}>
           <div className="flex justify-between gap-3">
             <div><div className="font-medium text-sm">{s.name}</div><div className="text-xs mt-1" style={{color:C.inkSoft}}>{s.historyCount} คาบ · {s.current!=null?'คะแนนล่าสุด '+s.current:'ยังไม่มีคะแนน'}</div></div>
