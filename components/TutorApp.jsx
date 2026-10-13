@@ -6,6 +6,7 @@ import ParentReportCard from './ParentReportCard';
 import InvoiceCard, { T as INVOICE_T } from './InvoiceCard';
 import MonthlyPlanner from './MonthlyPlanner';
 import SettingsPanel from './SettingsPanel';
+import Dashboard from './Dashboard';
 import { OWNER_ID as FORECAST_OWNER_ID } from '../lib/forecast';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import {
@@ -286,7 +287,7 @@ export default function App() {
           </div>
         </div>
         {tab === 'dashboard' && (
-          <Dashboard students={students} sessions={sessions} schedule={schedule} updateSessions={updateSessions} getStudent={getStudent} showToast={showToast} setTab={setTab} onOpenLessonForm={(slot, date) => { setRecordRequest({ slot, date }); setTab('sessions'); }} />
+          <Dashboard students={students} schedule={schedule} sessions={sessions} exceptions={exceptions} invoices={invoices} settings={settings} lang={lang} setTab={setTab} showToast={showToast} updateExceptions={updateExceptions} onOpenLessonForm={(slot, date) => { setRecordRequest({ slot, date }); setTab('sessions'); }} />
         )}
         {tab === 'students' && <StudentsTab students={students} updateStudents={updateStudents} sessions={sessions} />}
         {tab === 'progress' && <ProgressIntelligence students={students} sessions={sessions} />}
@@ -424,7 +425,7 @@ function SmartAlerts({ students, sessions, schedule }) {
   );
 }
 
-function Dashboard({ students, sessions, schedule, updateSessions, getStudent, showToast, setTab, onOpenLessonForm }) {
+function DashboardLegacy({ students, sessions, schedule, updateSessions, getStudent, showToast, setTab, onOpenLessonForm }) {
   if (students.length === 0) {
     return (
       <div>
