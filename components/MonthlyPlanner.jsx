@@ -22,6 +22,8 @@ const formatTime = value => String(value||'').slice(0,5) || '--:--';
 export default function MonthlyPlanner({ students=[], schedule=[], sessions=[], exceptions=[], updateExceptions, showToast, onOpenLessonForm, lang='th', setTab }) {
   const [month,setMonth] = useState(()=>monthFor(new Date()));
   const [studentFilter,setStudentFilter] = useState('all');
+  const [selectedDate,setSelectedDate] = useState(()=>todayKey());
+  const [showTrend,setShowTrend] = useState(false);
   const labels = T[lang] || T.th;
   const today = todayKey();
   const model = useMemo(()=>buildMonthlyForecast({month,students,schedule,sessions,exceptions,today}),[month,students,schedule,sessions,exceptions,today]);
@@ -30,90 +32,93 @@ export default function MonthlyPlanner({ students=[], schedule=[], sessions=[], 
   const visibleRows = model.rows.filter(row=>studentFilter==='all'||row.studentId===studentFilter);
   const [year,monthNum] = month.split('-').map(Number);
   const monthTitle = new Date(year,monthNum-1,1).toLocaleDateString(lang==='en'?'en-US':'th-TH',{month:'long',year:lang==='en'?'numeric':'numeric'});
-  const grouped = Array.from({length:5},(_,i)=>({week:i+1,rows:visibleRows.filter(row=>Math.ceil(Number(row.date.slice(-2))/7)===i+1)}));
-  const actualSessions = sessions.filter(s=>s.date?.slice(0,7)===month);
+  const actualSessions = sessions.filter(s=>s.date?.slice(0,7)===month&&(studentFilter==='all'||s.studentId===studentFilter));
   const actualAmount = actualSessions.reduce((sum,s)=>sum+Number(s.hours||0)*Number(s.rate||0),0);
-  const forecastAmount = model.forecast.filter(r=>studentFilter==='all'||r.studentId===studentFilter).reduce((sum,r)=>sum+r.amount,0);
-  const confirmedAmount = studentFilter==='all'?actualAmount:actualSessions.filter(s=>s.studentId===studentFilter).reduce((sum,s)=>sum+Number(s.hours||0)*Number(s.rate||0),0);
-  const pendingCount = model.pending.filter(r=>studentFilter==='all'||r.studentId===studentFilter).length;
-  const cancelledCount = model.cancelled.filter(r=>studentFilter==='all'||r.studentId===studentFilter).length;
-  const exceptionFor = row => exceptions.find(e=>e.slotId===row.slotId&&e.date===row.date&&e.status==='cancelled');
-  const cancelSlot = async row => {
-    if (!updateExceptions) return;
-    const entry={id:crypto.randomUUID(),slotId:row.slotId,date:row.date,status:'cancelled'};
-    const saved = await updateExceptions([...exceptions,entry]);
-    if(saved) showToast?.(lang==='en'?'Lesson cancelled':'ยกเลิกคาบแล้ว');
-  };
-  const undoCancel = async row => {
-    if (!updateExceptions) return;
-    const existing=exceptionFor(row);
-    const saved = await updateExceptions(exceptions.filter(e=>e.id!==existing?.id),existing?.id?[existing.id]:[]);
-    if(saved) showToast?.(lang==='en'?'Cancellation removed':'ยกเลิกสถานะยกเลิกแล้ว');
-  };
+  const forecastRows = model.forecast.filter(r=>studentFilter==='all'||r.studentId===studentFilter);
+  const pendingRows = model.pending.filter(r=>studentFilter==='all'||r.studentId===studentFilter);
+  const cancelledRows = model.cancelled.filter(r=>studentFilter==='all'||r.studentId===studentFilter);
+  const forecastAmount = forecastRows.reduce((sum,r)=>sum+r.amount,0);
+  const pendingAmount = pendingRows.reduce((sum,r)=>sum+r.amount,0);
+  const expectedAmount = actualAmount+forecastAmount+pendingAmount;
+  const visibleRows = model.rows.filter(row=>studentFilter==='all'||row.studentId===studentFilter);
+  const {days} = monthDateRange(month);
+  const firstWeekday=(new Date(year,monthNum-1,1).getDay()+6)%7;
+  const calendarCells=[...Array(firstWeekday).fill(null),...Array.from({length:days},(_,i)=>i+1)];
+  while(calendarCells.length%7) calendarCells.push(null);
+  const rowsByDate=new Map();
+  visibleRows.forEach(row=>rowsByDate.set(row.date,[...(rowsByDate.get(row.date)||[]),row]));
+  const chosenDate=selectedDate.slice(0,7)===month?selectedDate:month+'-01';
+  const selectedRows=rowsByDate.get(chosenDate)||[];
+  const dayNames=lang==='en'?['Mon','Tue','Wed','Thu','Fri','Sat','Sun']:['จ.','อ.','พ.','พฤ.','ศ.','ส.','อา.'];
   const colors = new Map(activeStudents.map((s,i)=>[s.id,PALETTE[i%PALETTE.length]]));
+  const moveMonth=offset=>{const next=shiftMonth(month,offset);setMonth(next);setSelectedDate(next+'-01');};
+  const selectToday=()=>{const t=todayKey();setMonth(monthFor(new Date()));setSelectedDate(t);};
+  const selectedLabel=formatDate(chosenDate,lang);
+  const selectedAmount=selectedRows.filter(r=>r.status!=='cancelled').reduce((sum,r)=>sum+r.amount,0);
+  const selectedHours=selectedRows.filter(r=>r.status!=='cancelled').reduce((sum,r)=>sum+Number(r.hours||0),0);
+  const totalLessons=visibleRows.filter(r=>r.status!=='cancelled').length;
+  const remainingRows=[...pendingRows,...forecastRows].sort((a,b)=>a.date.localeCompare(b.date)||a.start.localeCompare(b.start));
+  const actionLabels=lang==='en'?{empty:'No lessons on this date',add:'Add a lesson',actual:'Recorded',pending:'Needs recording',cancelled:'Cancelled',forecast:'Planned',income:'Estimated lesson income',hours:'hours',lesson:'lessons',day:'Selected day',actualShort:'Recorded income',remaining:'Expected / not yet recorded',expected:'Estimated total this month',select:'Select a date to see lesson details'}:{empty:'วันนี้ไม่มีคาบสอน',add:'เพิ่มคาบสอน',actual:'บันทึกแล้ว',pending:'รอบันทึก',cancelled:'ยกเลิก',forecast:'ตามแผน',income:'รายได้ประมาณการของวัน',hours:'ชั่วโมง',lesson:'คาบ',day:'คาบของวันที่เลือก',actualShort:'รายได้ที่บันทึกแล้ว',remaining:'รายได้คาดการณ์ / รอบันทึก',expected:'รายได้รวมประมาณการเดือนนี้',select:'เลือกวันที่ในปฏิทินเพื่อดูรายละเอียดคาบ'};
+  const statusText=row=>row.status==='confirmed'?actionLabels.actual:row.status==='pending'?actionLabels.pending:row.status==='cancelled'?actionLabels.cancelled:actionLabels.forecast;
 
-  return <div className="monthly-planner space-y-4">
-    <header className="flex flex-wrap items-start justify-between gap-3">
-      <div><h1 className="text-xl font-semibold">{labels.title}</h1><p className="mt-1 text-sm" style={{color:C.inkSoft}}>{labels.subtitle}</p></div>
-      <div className="flex items-center gap-2">
-        <button type="button" onClick={()=>setMonth(shiftMonth(month,-1))} aria-label="Previous month" className="rounded-lg border p-2" style={{borderColor:C.line}}><ChevronLeft size={18}/></button>
-        <div className="min-w-32 text-center font-semibold">{monthTitle}</div>
-        <button type="button" onClick={()=>setMonth(shiftMonth(month,1))} aria-label="Next month" className="rounded-lg border p-2" style={{borderColor:C.line}}><ChevronRight size={18}/></button>
-        <button type="button" onClick={()=>setMonth(monthFor(new Date()))} className="rounded-lg border px-3 py-2 text-sm" style={{borderColor:C.line}}>{labels.thisMonth}</button>
+  return <div className="monthly-planner calendar-monitor">
+    <header className="calendar-toolbar">
+      <div><div className="calendar-eyebrow">{lang==='en'?'TEACHING OVERVIEW':'TEACHING OVERVIEW'}</div><h1>{labels.title}</h1><p>{lang==='en'?'See every lesson, its status, and expected income in one monthly view.':'เห็นคาบสอนทั้งเดือน สถานะงาน และรายได้ที่คาดว่าจะได้รับในหน้าเดียว'}</p></div>
+      <div className="calendar-month-nav">
+        <button type="button" onClick={()=>moveMonth(-1)} aria-label="Previous month"><ChevronLeft size={18}/></button>
+        <div className="calendar-month-title">{monthTitle}</div>
+        <button type="button" onClick={()=>moveMonth(1)} aria-label="Next month"><ChevronRight size={18}/></button>
+        <button type="button" className="calendar-today-btn" onClick={selectToday}>{labels.today}</button>
       </div>
     </header>
-    <div className="grid grid-cols-2 xl:grid-cols-4 gap-2">
-      <div className="rounded-xl border p-3" style={{background:C.pineTint,borderColor:C.pineTint}}><div className="text-xs" style={{color:C.pineDark}}>{labels.confirmed}</div><div className="mt-1 text-xl font-semibold" style={{color:C.pineDark}}>{money(confirmedAmount,lang)}</div></div>
-      <div className="rounded-xl border p-3" style={{background:'#EEF7FC',borderColor:'#D8EAF5'}}><div className="text-xs" style={{color:C.blueText}}>{labels.forecast}</div><div className="mt-1 text-xl font-semibold" style={{color:C.blueText}}>{money(forecastAmount,lang)}</div></div>
-      <div className="rounded-xl border p-3" style={{background:C.goldTint,borderColor:C.goldTint}}><div className="text-xs" style={{color:C.gold}}>{labels.pending}</div><div className="mt-1 text-xl font-semibold" style={{color:C.gold}}>{pendingCount} {labels.lessons}</div></div>
-      <div className="rounded-xl border p-3" style={{background:C.brickTint,borderColor:C.brickTint}}><div className="text-xs" style={{color:C.brick}}>{labels.cancelled}</div><div className="mt-1 text-xl font-semibold" style={{color:C.brick}}>{cancelledCount} {labels.lessons}</div></div>
-    </div>
-    <div className="flex flex-wrap items-center gap-2">
-      <span className="text-sm" style={{color:C.inkSoft}}>{labels.student}:</span>
-      <select value={studentFilter} onChange={e=>setStudentFilter(e.target.value)} className="rounded-lg border px-3 py-2 text-sm" style={{borderColor:C.line,background:C.surface}}>
-        <option value="all">{labels.all}</option>{activeStudents.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
-      </select>
-    </div>
-    {!activeStudents.length ? <div className="rounded-xl border p-8 text-center text-sm" style={{borderColor:C.line,color:C.inkSoft}}>{labels.noStudents}</div> : grouped.map(group=><section key={group.week} className="rounded-xl border overflow-hidden" style={{borderColor:C.line,background:C.surface}}>
-      <div className="px-4 py-3 font-semibold text-sm" style={{background:C.paper}}>{labels.week} {group.week}</div>
-      {group.rows.length===0 ? <div className="px-4 py-5 text-sm" style={{color:C.inkSoft}}>{labels.noLessons}</div> : <div className="divide-y" style={{borderColor:C.line}}>
-        {group.rows.map(row=>{
-          const color=colors.get(row.studentId)||C.pine;
-          const isCancelled=row.status==='cancelled';
-          const isPending=row.status==='pending';
-          const isConfirmed=row.status==='confirmed';
-          const statusLabel=isCancelled?labels.cancelled:isPending?labels.pending:isConfirmed?labels.confirmed:labels.forecast;
-          return <article key={row.id} className="flex gap-3 p-3 sm:p-4" style={{borderColor:C.line,background:isPending?C.goldTint:isCancelled?'#F8F4F1':'transparent',opacity:isCancelled?0.75:1}}>
-            <div className="w-1.5 shrink-0 rounded-full" style={{background:isCancelled?C.brick:color}}/>
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2"><span className="font-semibold text-sm" style={{textDecoration:isCancelled?'line-through':'none'}}>{formatDate(row.date,lang)}</span><span className="text-xs" style={{color:C.inkSoft}}>{formatTime(row.start)}–{formatTime(row.end)}</span><span className="rounded-full px-2 py-0.5 text-xs" style={{background:isConfirmed?C.pineTint:isPending?C.goldTint:isCancelled?C.brickTint:'#EEF7FC',color:isConfirmed?C.pineDark:isPending?C.gold:isCancelled?C.brick:C.blueText}}>{statusLabel}</span></div>
-              <div className="mt-1 flex flex-wrap items-baseline gap-x-2"><span className="font-medium text-sm">{row.studentName}</span><span className="text-xs" style={{color:C.inkSoft}}>{row.hours} {labels.hours} · {labels.amount}: {money(row.amount,lang)}</span></div>
-              {isPending&&<p className="mt-1 text-xs" style={{color:C.gold}}>{labels.waiting}</p>}
-              {isCancelled&&<p className="mt-1 text-xs" style={{color:C.brick}}>{labels.cancelHint}</p>}
-            </div>
-            <div className="flex shrink-0 flex-col gap-1.5">
-              {isPending&&<button type="button" onClick={()=>onOpenLessonForm?.(schedule.find(s=>s.id===row.slotId),row.date)} className="rounded-md px-2 py-1.5 text-xs font-semibold" style={{background:C.pine,color:'#fff'}}>{labels.saveTaught}</button>}
-              {!isCancelled&&<button type="button" onClick={()=>cancelSlot(row)} className="rounded-md border px-2 py-1.5 text-xs" style={{borderColor:C.line,color:C.inkSoft}}><Ban size={12} className="inline mr-1"/>{labels.cancel}</button>}
-              {isCancelled&&<button type="button" onClick={()=>undoCancel(row)} className="rounded-md border px-2 py-1.5 text-xs" style={{borderColor:C.line,color:C.pine}}><RotateCcw size={12} className="inline mr-1"/>{labels.undo}</button>}
-            </div>
-          </article>;
-        })}
-      </div>}
-    </section>)}
-    <section className="rounded-xl border p-4" style={{borderColor:C.line,background:C.surface}}>
-      <div className="mb-3 font-semibold text-sm">{labels.chartTitle}</div>
-      <div className="h-64">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={chart} margin={{top:12,right:4,left:4,bottom:4}}>
-            <CartesianGrid strokeDasharray="0" vertical={false} stroke={C.line}/>
-            <XAxis dataKey="label" tick={{fontSize:11}}/>
-            <YAxis tick={{fontSize:10}} width={48} tickFormatter={v=>lang==='en'?Math.round(v/1000)+'k':Math.round(v/1000)+'k'}/>
-            <Tooltip formatter={(value,name)=>[money(value,lang),name==='confirmed'?labels.chartActual:labels.chartForecast]}/>
-            <Bar dataKey="confirmed" stackId="income" fill={C.pine} isAnimationActive={false}/>
-            <Bar dataKey="forecast" stackId="income" fill={C.blue} isAnimationActive={false}/>
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
+
+    <section className="calendar-income-overview">
+      <div className="calendar-income-main"><span>{actionLabels.expected}</span><strong>{money(expectedAmount,lang)}</strong><small>{totalLessons} {actionLabels.lesson} · {visibleRows.filter(r=>r.status!=='cancelled').reduce((n,r)=>n+Number(r.hours||0),0)} {actionLabels.hours}</small></div>
+      <div className="calendar-income-stat"><span>{actionLabels.actualShort}</span><strong>{money(actualAmount,lang)}</strong><small>{model.confirmed.filter(r=>studentFilter==='all'||r.studentId===studentFilter).length} {actionLabels.lesson}</small></div>
+      <div className="calendar-income-stat"><span>{actionLabels.remaining}</span><strong>{money(forecastAmount+pendingAmount,lang)}</strong><small>{forecastRows.length+pendingRows.length} {actionLabels.lesson}</small></div>
     </section>
+
+    <div className="calendar-filter-row">
+      <label>{labels.student}<select value={studentFilter} onChange={e=>setStudentFilter(e.target.value)}><option value="all">{labels.all}</option>{activeStudents.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
+      <div className="calendar-legend"><span><i className="legend-dot legend-confirmed"/> {actionLabels.actual}</span><span><i className="legend-dot legend-forecast"/> {actionLabels.forecast}</span><span><i className="legend-dot legend-pending"/> {actionLabels.pending}</span><span><i className="legend-dot legend-cancelled"/> {actionLabels.cancelled}</span></div>
+    </div>
+
+    {!activeStudents.length ? <div className="calendar-empty">{labels.noStudents}</div> : <div className="calendar-workspace">
+      <section className="calendar-grid-panel">
+        <div className="calendar-weekdays">{dayNames.map((d,i)=><div key={d} className={i>4?'weekend':''}>{d}</div>)}</div>
+        <div className="calendar-month-grid">{calendarCells.map((day,index)=>{
+          if(!day)return <div key={'blank-'+index} className="calendar-day calendar-day-blank"/>;
+          const date=month+'-'+String(day).padStart(2,'0');
+          const dayRows=rowsByDate.get(date)||[];
+          const liveRows=dayRows.filter(r=>r.status!=='cancelled');
+          const amount=liveRows.reduce((sum,r)=>sum+r.amount,0);
+          const isToday=date===today;
+          const isSelected=date===chosenDate;
+          return <button type="button" key={date} onClick={()=>setSelectedDate(date)} className={'calendar-day'+(isSelected?' is-selected':'')+(isToday?' is-today':'')}>
+            <span className="calendar-day-number">{day}{isToday&&<i/>}</span>
+            {dayRows.slice(0,3).map(row=><span key={row.id} className={'calendar-event event-'+row.status} style={{'--event-color':colors.get(row.studentId)||C.pine}}><i/>{row.start?.slice(0,5)} {row.studentName}</span>)}
+            {dayRows.length>3&&<span className="calendar-more">+{dayRows.length-3} {lang==='en'?'more':'คาบ'}</span>}
+            {liveRows.length>0&&<span className="calendar-day-income">{money(amount,lang)}</span>}
+          </button>;
+        })}</div>
+        <div className="calendar-grid-footer"><CalendarDays size={15}/>{lang==='en'?'Select any date to inspect lessons and income':'แตะวันที่เพื่อดูคาบสอนและรายได้ของวันนั้น'}</div>
+      </section>
+
+      <aside className="calendar-agenda">
+        <div className="calendar-agenda-header"><div><span>{actionLabels.day}</span><h2>{selectedLabel}</h2></div><div className="calendar-agenda-total">{money(selectedAmount,lang)}<small>{selectedHours} {actionLabels.hours}</small></div></div>
+        {selectedRows.length===0?<div className="calendar-agenda-empty"><CalendarDays size={25}/><p>{actionLabels.empty}</p><button type="button" onClick={()=>setTab?.('schedule')}>{actionLabels.add}</button></div>:<div className="calendar-agenda-list">{selectedRows.map(row=>{
+          const isCancelled=row.status==='cancelled';
+          return <article key={row.id} className={'calendar-agenda-item'+(isCancelled?' is-cancelled':'')}>
+            <div className="agenda-time">{formatTime(row.start)}<span>{formatTime(row.end)}</span></div>
+            <div className="agenda-detail"><strong>{row.studentName}</strong><span>{row.hours} {actionLabels.hours} · {money(row.amount,lang)}</span><em className={'agenda-status status-'+row.status}>{statusText(row)}</em></div>
+            <div className="agenda-actions">{row.status==='pending'&&<button type="button" className="agenda-record-btn" onClick={()=>onOpenLessonForm?.(schedule.find(s=>s.id===row.slotId),row.date)}>{labels.saveTaught}</button>}{!isCancelled&&<button type="button" className="agenda-cancel-btn" onClick={()=>cancelSlot(row)}>{labels.cancel}</button>}{isCancelled&&<button type="button" className="agenda-undo-btn" onClick={()=>undoCancel(row)}>{labels.undo}</button>}</div>
+          </article>;
+        })}</div>}
+        <div className="calendar-agenda-footer"><span>{actionLabels.income}</span><strong>{money(selectedAmount,lang)}</strong><small>{selectedRows.filter(r=>r.status==='pending').length} {actionLabels.pending} · {selectedRows.filter(r=>r.status==='forecast').length} {actionLabels.forecast}</small></div>
+      </aside>
+    </div>}
+
+    <button type="button" className="calendar-trend-toggle" onClick={()=>setShowTrend(v=>!v)}><span>{labels.chartTitle}</span><span>{showTrend?'−':'+'}</span></button>
+    {showTrend&&<section className="calendar-trend-panel"><div className="h-64"><ResponsiveContainer width="100%" height="100%"><BarChart data={chart} margin={{top:12,right:4,left:4,bottom:4}}><CartesianGrid strokeDasharray="0" vertical={false} stroke={C.line}/><XAxis dataKey="label" tick={{fontSize:11}}/><YAxis tick={{fontSize:10}} width={48} tickFormatter={v=>Math.round(v/1000)+'k'}/><Tooltip formatter={(value,name)=>[money(value,lang),name==='confirmed'?labels.chartActual:labels.chartForecast]}/><Bar dataKey="confirmed" stackId="income" fill={C.pine} isAnimationActive={false}/><Bar dataKey="forecast" stackId="income" fill={C.blue} isAnimationActive={false}/></BarChart></ResponsiveContainer></div></section>}
   </div>;
 }
