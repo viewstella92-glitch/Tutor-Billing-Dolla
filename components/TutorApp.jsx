@@ -202,10 +202,12 @@ export default function App() {
         if (error) throw error;
       }
       setStudents(next);
+      return true;
     } catch (e) {
       console.error(e);
       setStudents(previous);
       showToast(lang==='en'?'Could not save student changes':'บันทึกข้อมูลนักเรียนไม่สำเร็จ ข้อมูลเดิมยังแสดงอยู่');
+      return false;
     }
   };
 
@@ -697,14 +699,17 @@ function StudentsTab({ students, updateStudents, sessions }) {
   const openEdit = (s) => { setForm({ ...emptyForm, ...s, subjects:Array.isArray(s.subjects)?s.subjects:[], baselineScore:s.baselineScore??'', latestScore:s.latestScore??'', targetScore:s.targetScore??'' }); setEditing(s.id); };
   const toggleSubject = (subject) => setForm((f) => ({ ...f, subjects:f.subjects.includes(subject)?f.subjects.filter(x=>x!==subject):[...f.subjects,subject] }));
 
-  const save = () => {
+  const save = async () => {
     const name=form.name.trim(), rate=parseFloat(form.rate);
-    if (!name || !rate || rate<=0) return;
+    if (!name || !Number.isFinite(rate) || rate<=0) return;
     const student={ id:editing==='new'?uid():editing, name, rate, grade:form.grade.trim(), subjects:form.subjects, goals:form.goals.trim(), strengths:form.strengths.trim(), weaknesses:form.weaknesses.trim(), learningStyle:form.learningStyle, notes:form.notes.trim(), status:form.status, targetExam:form.targetExam.trim(), targetDate:form.targetDate, baselineScore:form.baselineScore===''?'':Number(form.baselineScore), latestScore:form.latestScore===''?'':Number(form.latestScore), targetScore:form.targetScore===''?'':Number(form.targetScore) };
-    updateStudents(editing==='new'?[...students,student]:students.map(s=>s.id===editing?{...s,...student}:s));
-    setEditing(null);
+    const saved=await updateStudents(editing==='new'?[...students,student]:students.map(s=>s.id===editing?{...s,...student}:s));
+    if(saved) setEditing(null);
   };
-  const remove = (id) => { if(confirm('ลบนักเรียนคนนี้? ประวัติการสอนเดิมจะยังอยู่')) updateStudents(students.filter(s=>s.id!==id), [id]); };
+  const remove = async (id) => {
+    if(!confirm('ลบนักเรียนคนนี้? ประวัติการสอนเดิมจะยังอยู่')) return;
+    await updateStudents(students.filter(s=>s.id!==id), [id]);
+  };
   const subjectOptions=['คณิตศาสตร์','ฟิสิกส์','ภาษาอังกฤษ','ภาษาจีน','วิทยาศาสตร์'];
   const buildAnalysis = (s) => {
     const history = sessions.filter(x=>x.studentId===s.id).sort((a,b)=>a.date.localeCompare(b.date));
