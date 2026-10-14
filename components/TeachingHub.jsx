@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { CalendarDays, ChevronLeft, ChevronRight, Clock3, Plus, BookOpen, Wallet, CheckCircle2, Circle, Search, X, Trash2, PencilLine, CalendarPlus, NotebookPen } from 'lucide-react';
 
 const DAYS = ['จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.', 'ส.', 'อา.'];
@@ -12,7 +12,7 @@ const parseDate = s => new Date(`${s}T12:00:00`);
 const dayIndex = d => (d.getDay()+6)%7;
 const id = () => crypto.randomUUID();
 
-export default function TeachingHub({students=[],schedule=[],sessions=[],exceptions=[],updateSchedule,updateSessions,updateExceptions,showToast}) {
+export default function TeachingHub({students=[],schedule=[],sessions=[],exceptions=[],updateSchedule,updateSessions,updateExceptions,showToast,recordRequest,clearRecordRequest}) {
   const [view,setView] = useState('calendar');
   const [month,setMonth] = useState(()=>{const d=new Date();return new Date(d.getFullYear(),d.getMonth(),1)});
   const [selectedDate,setSelectedDate] = useState(keyOf(new Date()));
@@ -47,6 +47,7 @@ export default function TeachingHub({students=[],schedule=[],sessions=[],excepti
     setLessonForm({studentId:studentId||slot?.studentId||'',date,hours:slot?String(Math.max(.5,(Number(slot.end?.slice(0,2))*60+Number(slot.end?.slice(3,5))-Number(slot.start?.slice(0,2))*60-Number(slot.start?.slice(3,5)))/60)):'1',note:''});
     setShowLessonForm(true);
   };
+  useEffect(()=>{if(recordRequest){openLesson(recordRequest.slot?.studentId||'',recordRequest.date||selectedDate,recordRequest.slot||null);setView('calendar');clearRecordRequest?.();}},[recordRequest]);
   const saveSchedule = async e => {
     e.preventDefault(); if(!scheduleForm.studentId)return showToast?.('กรุณาเลือกนักเรียน');
     setBusy(true);
