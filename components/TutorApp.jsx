@@ -1358,8 +1358,8 @@ function LessonForm({initial={},students,onSave,onDelete,onCancel}) {
       :<input value={form[key]} onChange={e=>set(key,e.target.value)} placeholder={placeholder} className={textInput+' mt-1'} style={fieldStyle}/>}
     </label>
   );
-  return <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4" style={{background:'rgba(35,40,43,.45)'}}>
-    <div role="dialog" aria-modal="true" aria-label={editing?'แก้ไขบันทึกคาบสอน':'บันทึกคาบสอน'} className="w-full overflow-y-auto overscroll-contain rounded-t-2xl p-5 pb-32 sm:max-w-xl sm:rounded-2xl sm:p-6" style={{background:C.surface,maxHeight:'90dvh'}}>
+  return <div className="lesson-form-overlay fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4" style={{background:'rgba(20,35,27,.52)',backdropFilter:'blur(5px)'}}>
+    <div role="dialog" aria-modal="true" aria-label={editing?'แก้ไขบันทึกคาบสอน':'บันทึกคาบสอน'} className="lesson-form-dialog w-full overflow-y-auto overscroll-contain rounded-t-2xl p-5 pb-8 sm:max-w-2xl sm:rounded-2xl sm:p-7" style={{background:C.surface,maxHeight:'92dvh'}}>
       <div className="mb-4 flex items-center justify-between"><div><h2 className="text-lg font-semibold" style={{color:C.ink}}>{editing?'แก้ไขบันทึกคาบสอน':'บันทึกคาบสอน'}</h2><p className="mt-1 text-xs" style={{color:C.inkSoft}}>{editing?'แก้ไขรายละเอียดของคาบเดิม':'ตรวจสอบข้อมูลคาบ แล้วบันทึกเมื่อพร้อม'}</p></div><button type="button" onClick={onCancel} aria-label="ปิดฟอร์ม" className="rounded-lg p-2" style={{color:C.inkSoft}}><X size={18}/></button></div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <label className="mb-1 block text-xs" style={{color:C.inkSoft}}>นักเรียน<select value={form.studentId} onChange={e=>{const s=students.find(x=>x.id===e.target.value);setForm(p=>({...p,studentId:e.target.value,rate:p.rate===''?String(s?.rate??0):p.rate}));}} className={textInput+' mt-1'} style={fieldStyle}><option value="">เลือกนักเรียน</option>{students.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
