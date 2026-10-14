@@ -144,17 +144,22 @@ export default function App() {
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 2200); };
 
   const updateExceptions = async (next, deletedIds = []) => {
-    setExceptions(next);
+    const previous = exceptions;
     try {
-      for (const id of deletedIds) {
-        const { error } = await supabase.from('tutor_slot_exceptions').delete().eq('id', id).eq('user_id', OWNER_ID);
-        if (error) throw error;
-      }
       if (next.length) {
         const { error } = await supabase.from('tutor_slot_exceptions').upsert(next.map(x => ({ id:x.id, user_id:OWNER_ID, slot_id:x.slotId, date:x.date, status:x.status || 'cancelled' })), { onConflict:'id' });
         if (error) throw error;
       }
-    } catch (e) { console.error(e); showToast(lang==='en'?'Could not save cancellation':'บันทึกสถานะยกเลิกไม่สำเร็จ'); }
+      for (const id of deletedIds) {
+        const { error } = await supabase.from('tutor_slot_exceptions').delete().eq('id', id).eq('user_id', OWNER_ID);
+        if (error) throw error;
+      }
+      setExceptions(next);
+    } catch (e) {
+      console.error(e);
+      setExceptions(previous);
+      showToast(lang==='en'?'Could not save cancellation':'บันทึกสถานะยกเลิกไม่สำเร็จ ข้อมูลเดิมยังแสดงอยู่');
+    }
   };
 
   const saveSettings = async (next) => {
@@ -186,19 +191,41 @@ export default function App() {
   };
 
   const updateStudents = async (next, deletedIds = []) => {
-    setStudents(next);
+    const previous = students;
     try {
-      for (const id of deletedIds) { const { error } = await supabase.from('tutor_students').delete().eq('id', id).eq('user_id', OWNER_ID); if (error) throw error; }
-      if (next.length) await supabase.from('tutor_students').upsert(next.map(x => ({ id:x.id, user_id:OWNER_ID, name:x.name, rate:Number(x.rate), grade:x.grade||null, subjects:Array.isArray(x.subjects)?x.subjects:[], goals:x.goals||null, strengths:x.strengths||null, weaknesses:x.weaknesses||null, learning_style:x.learningStyle||null, notes:x.notes||null, status:x.status||'active', target_exam:x.targetExam||null, target_date:x.targetDate||null, baseline_score:x.baselineScore===''||x.baselineScore==null?null:Number(x.baselineScore), latest_score:x.latestScore===''||x.latestScore==null?null:Number(x.latestScore), target_score:x.targetScore===''||x.targetScore==null?null:Number(x.targetScore) })));
-    } catch (e) { console.error(e); showToast('บันทึกนักเรียนไม่สำเร็จ'); }
+      if (next.length) {
+        const { error } = await supabase.from('tutor_students').upsert(next.map(x => ({ id:x.id, user_id:OWNER_ID, name:x.name, rate:Number(x.rate), grade:x.grade||null, subjects:Array.isArray(x.subjects)?x.subjects:[], goals:x.goals||null, strengths:x.strengths||null, weaknesses:x.weaknesses||null, learning_style:x.learningStyle||null, notes:x.notes||null, status:x.status||'active', target_exam:x.targetExam||null, target_date:x.targetDate||null, baseline_score:x.baselineScore===''||x.baselineScore==null?null:Number(x.baselineScore), latest_score:x.latestScore===''||x.latestScore==null?null:Number(x.latestScore), target_score:x.targetScore===''||x.targetScore==null?null:Number(x.targetScore) })), { onConflict:'id' });
+        if (error) throw error;
+      }
+      for (const id of deletedIds) {
+        const { error } = await supabase.from('tutor_students').delete().eq('id', id).eq('user_id', OWNER_ID);
+        if (error) throw error;
+      }
+      setStudents(next);
+    } catch (e) {
+      console.error(e);
+      setStudents(previous);
+      showToast(lang==='en'?'Could not save student changes':'บันทึกข้อมูลนักเรียนไม่สำเร็จ ข้อมูลเดิมยังแสดงอยู่');
+    }
   };
 
   const updateSchedule = async (next, deletedIds = []) => {
-    setSchedule(next);
+    const previous = schedule;
     try {
-      for (const id of deletedIds) { const { error } = await supabase.from('tutor_schedule').delete().eq('id', id).eq('user_id', OWNER_ID); if (error) throw error; }
-      if (next.length) await supabase.from('tutor_schedule').upsert(next.map(x => ({ id:x.id, user_id:OWNER_ID, student_id:x.studentId, recurring:Boolean(x.recurring), day:x.recurring?Number(x.day):null, date:x.recurring?null:x.date, start_time:x.start, end_time:x.end })));
-    } catch (e) { console.error(e); showToast('บันทึกตารางสอนไม่สำเร็จ'); }
+      if (next.length) {
+        const { error } = await supabase.from('tutor_schedule').upsert(next.map(x => ({ id:x.id, user_id:OWNER_ID, student_id:x.studentId, recurring:Boolean(x.recurring), day:x.recurring?Number(x.day):null, date:x.recurring?null:x.date, start_time:x.start, end_time:x.end })), { onConflict:'id' });
+        if (error) throw error;
+      }
+      for (const id of deletedIds) {
+        const { error } = await supabase.from('tutor_schedule').delete().eq('id', id).eq('user_id', OWNER_ID);
+        if (error) throw error;
+      }
+      setSchedule(next);
+    } catch (e) {
+      console.error(e);
+      setSchedule(previous);
+      showToast(lang==='en'?'Could not save schedule':'บันทึกตารางสอนไม่สำเร็จ ข้อมูลเดิมยังแสดงอยู่');
+    }
   };
 
   const updateSessions = async (next, deletedIds = []) => {
@@ -240,9 +267,10 @@ export default function App() {
     ]},
   ];
   const activeGroup = NAV_GROUPS.find(group => group.items.some(item => item.id === tab))?.id || 'overview';
+  useEffect(() => { setOpenNavGroup(activeGroup); }, [activeGroup]);
   const renderNavigation = (compact = false) => NAV_GROUPS.map(group => {
     const GroupIcon = group.icon;
-    const isOpen = openNavGroup === group.id || activeGroup === group.id;
+    const isOpen = openNavGroup === group.id;
     const isActive = activeGroup === group.id;
     return <div key={group.id} className="nav-group">
       <button type="button" onClick={() => {
