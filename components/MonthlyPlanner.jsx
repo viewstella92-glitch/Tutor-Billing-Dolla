@@ -40,7 +40,6 @@ export default function MonthlyPlanner({ students=[], schedule=[], sessions=[], 
   const forecastAmount = forecastRows.reduce((sum,r)=>sum+r.amount,0);
   const pendingAmount = pendingRows.reduce((sum,r)=>sum+r.amount,0);
   const expectedAmount = actualAmount+forecastAmount+pendingAmount;
-  const visibleRows = model.rows.filter(row=>studentFilter==='all'||row.studentId===studentFilter);
   const {days} = monthDateRange(month);
   const firstWeekday=(new Date(year,monthNum-1,1).getDay()+6)%7;
   const calendarCells=[...Array(firstWeekday).fill(null),...Array.from({length:days},(_,i)=>i+1)];
