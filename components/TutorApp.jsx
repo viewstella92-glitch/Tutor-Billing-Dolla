@@ -155,10 +155,12 @@ export default function App() {
         if (error) throw error;
       }
       setExceptions(next);
+      return true;
     } catch (e) {
       console.error(e);
       setExceptions(previous);
       showToast(lang==='en'?'Could not save cancellation':'บันทึกสถานะยกเลิกไม่สำเร็จ ข้อมูลเดิมยังแสดงอยู่');
+      return false;
     }
   };
 
