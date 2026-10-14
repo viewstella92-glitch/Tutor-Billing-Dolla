@@ -289,11 +289,6 @@ export default function App() {
       {id:'invoice',label:lang==='en'?'Parent invoices':'ใบแจ้งค่าสอน',icon:Receipt},
       {id:'business',label:lang==='en'?'Income overview':'สรุปรายได้',icon:BarChart},
     ]},
-    { id:'reports', label:lang==='en'?'Reports':'รายงาน', icon:ClipboardList, items:[
-      {id:'progress',label:lang==='en'?'Learning progress':'พัฒนาการ',icon:TrendingUp},
-      {id:'alerts',label:lang==='en'?'Follow-up list':'รายการติดตาม',icon:Bell},
-      {id:'export',label:lang==='en'?'Export data':'ส่งออกข้อมูล',icon:Download},
-    ]},
   ];
   const activeGroup = NAV_GROUPS.find(group => group.items.some(item => item.id === tab))?.id || 'overview';
   useEffect(() => { setOpenNavGroup(activeGroup); }, [activeGroup]);
