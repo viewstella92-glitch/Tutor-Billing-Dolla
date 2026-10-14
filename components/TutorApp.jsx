@@ -4,8 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import ParentReportCard from './ParentReportCard';
 import InvoiceCard, { T as INVOICE_T } from './InvoiceCard';
-import MonthlyPlanner from './MonthlyPlanner';
-import ScheduleTable from './ScheduleTable';
+import TeachingHub from './TeachingHub';
 import SettingsPanel from './SettingsPanel';
 import Dashboard from './Dashboard';
 import { OWNER_ID as FORECAST_OWNER_ID } from '../lib/forecast';
@@ -280,11 +279,7 @@ export default function App() {
   const NAV_GROUPS = [
     { id:'overview', label:lang==='en'?'Overview':'ภาพรวม', icon:LayoutDashboard, items:[{id:'dashboard',label:lang==='en'?'Dashboard':'หน้าหลัก',icon:LayoutDashboard}] },
     { id:'students', label:lang==='en'?'Students':'นักเรียน', icon:Users, items:[{id:'students',label:lang==='en'?'Student profiles':'ข้อมูลนักเรียน',icon:Users}] },
-    { id:'teaching', label:lang==='en'?'Teaching':'การสอน', icon:CalendarDays, items:[
-      {id:'schedule',label:lang==='en'?'Weekly schedule':'ตารางสอน',icon:CalendarDays},
-      {id:'plan',label:lang==='en'?'Monthly planner':'แพลนรายเดือน',icon:CalendarDays},
-      {id:'sessions',label:lang==='en'?'Lesson records':'บันทึกคาบเรียน',icon:ClipboardList},
-    ]},
+    { id:'teaching', label:lang==='en'?'Teaching':'จัดการการสอน', icon:CalendarDays, items:[{id:'teaching',label:lang==='en'?'Teaching workspace':'ปฏิทินและบันทึกสอน',icon:CalendarDays}] },
     { id:'finance', label:lang==='en'?'Finance':'การเงิน', icon:Receipt, items:[
       {id:'invoice',label:lang==='en'?'Parent invoices':'ใบแจ้งค่าสอน',icon:Receipt},
       {id:'business',label:lang==='en'?'Income overview':'สรุปรายได้',icon:BarChart},
@@ -348,19 +343,16 @@ export default function App() {
           </div>
         </div>
         {tab === 'dashboard' && (
-          <Dashboard students={students} schedule={schedule} sessions={sessions} exceptions={exceptions} invoices={invoices} settings={settings} lang={lang} setTab={setTab} showToast={showToast} updateExceptions={updateExceptions} onOpenLessonForm={(slot, date) => { setRecordRequest({ slot, date }); setTab('sessions'); }} />
+          <Dashboard students={students} schedule={schedule} sessions={sessions} exceptions={exceptions} invoices={invoices} settings={settings} lang={lang} setTab={setTab} showToast={showToast} updateExceptions={updateExceptions} onOpenLessonForm={(slot, date) => { setRecordRequest({ slot, date }); setTab('teaching'); }} />
         )}
         {tab === 'students' && <StudentsTab students={students} updateStudents={updateStudents} sessions={sessions} />}
         {tab === 'progress' && <ProgressIntelligence students={students} sessions={sessions} />}
         {tab === 'alerts' && <SmartAlerts students={students} sessions={sessions} schedule={schedule} />}
         {tab === 'business' && <BusinessIntelligence students={students} sessions={sessions} schedule={schedule} />}
-        {tab === 'plan' && <MonthlyPlanner students={students} schedule={schedule} sessions={sessions} exceptions={exceptions} updateExceptions={updateExceptions} showToast={showToast} lang={lang} setTab={setTab} onOpenLessonForm={(slot, date) => { setRecordRequest({ slot, date }); setTab('sessions'); }} />}
-        {tab === 'schedule' && (
-          <ScheduleTable students={students} schedule={schedule} updateSchedule={updateSchedule} showToast={showToast} onOpenLessonForm={(slot, date) => { setRecordRequest({ slot, date }); setTab('sessions'); }} />
-        )}
-        {tab === 'sessions' && (
-          <SessionsTab students={students} sessions={sessions} updateSessions={updateSessions} getStudent={getStudent} showToast={showToast} recordRequest={recordRequest} clearRecordRequest={() => setRecordRequest(null)} />
-        )}
+        {tab === 'teaching' && <TeachingHub students={students} schedule={schedule} sessions={sessions} exceptions={exceptions} updateSchedule={updateSchedule} updateSessions={updateSessions} updateExceptions={updateExceptions} showToast={showToast} recordRequest={recordRequest} clearRecordRequest={() => setRecordRequest(null)} />}
+        {tab === 'plan' && <TeachingHub students={students} schedule={schedule} sessions={sessions} exceptions={exceptions} updateSchedule={updateSchedule} updateSessions={updateSessions} updateExceptions={updateExceptions} showToast={showToast} recordRequest={recordRequest} clearRecordRequest={() => setRecordRequest(null)} />}
+        {tab === 'schedule' && <TeachingHub students={students} schedule={schedule} sessions={sessions} exceptions={exceptions} updateSchedule={updateSchedule} updateSessions={updateSessions} updateExceptions={updateExceptions} showToast={showToast} recordRequest={recordRequest} clearRecordRequest={() => setRecordRequest(null)} />}
+        {tab === 'sessions' && <TeachingHub students={students} schedule={schedule} sessions={sessions} exceptions={exceptions} updateSchedule={updateSchedule} updateSessions={updateSessions} updateExceptions={updateExceptions} showToast={showToast} recordRequest={recordRequest} clearRecordRequest={() => setRecordRequest(null)} />}
         {tab === 'invoice' && (
           <InvoiceTab students={students} sessions={sessions} invoices={invoices} settings={settings} lang={lang} onCreateInvoice={createInvoice} showToast={showToast} />
         )}
