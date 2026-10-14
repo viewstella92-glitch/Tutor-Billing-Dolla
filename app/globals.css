@@ -61,14 +61,18 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .nav-subitem:hover { background: rgba(255,255,255,.78); color: var(--tutor-pine-dark); }
 .nav-subitem.is-current { color: var(--tutor-pine-dark); background: rgba(234,241,233,.72); font-weight: 650; }
 .mobile-nav { background: rgba(250,248,242,.94); border-bottom: 1px solid var(--tutor-line); backdrop-filter: blur(16px); }
-.mobile-nav-groups { display: flex; gap: .4rem; padding: .55rem .75rem; overflow-x: auto; }
-.mobile-nav-groups .nav-group { flex: 0 0 auto; position: relative; }
-.mobile-nav-groups .nav-group-trigger { min-height: 40px; width: auto; white-space: nowrap; padding: .6rem .75rem; gap: .45rem; }
-.mobile-nav-groups .nav-group-count { min-width: 18px; height: 18px; }
+.mobile-nav-groups { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .25rem; padding: .5rem .6rem; overflow: visible; }
+.mobile-nav-groups .nav-group { min-width: 0; position: static; }
+.mobile-nav-groups .nav-group-trigger {
+  min-height: 48px; width: 100%; flex-direction: column; justify-content: center; gap: .2rem;
+  padding: .35rem .15rem; text-align: center; font-size: .68rem; line-height: 1.1;
+}
+.mobile-nav-groups .nav-group-trigger > span:first-of-type { flex: initial; }
+.mobile-nav-groups .nav-group-count { display: none; }
 .mobile-nav-groups .nav-subitems {
-  position: absolute; top: calc(100% + .25rem); left: 0; z-index: 30; width: max-content; min-width: 190px;
+  position: absolute; top: calc(100% + .25rem); left: .65rem; right: .65rem; z-index: 30; width: auto;
   margin: 0; padding: .45rem; border: 1px solid var(--tutor-line); border-radius: 14px;
-  background: rgba(255,255,255,.98); box-shadow: 0 16px 38px rgba(31,51,39,.13); border-left: 1px solid var(--tutor-line);
+  background: rgba(255,255,255,.98); box-shadow: 0 16px 38px rgba(31,51,39,.13);
 }
 .mobile-nav-groups .nav-subitem { padding: .65rem .7rem; }
 @media (min-width: 768px) {
