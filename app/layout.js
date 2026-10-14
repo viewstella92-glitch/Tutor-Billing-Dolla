@@ -1,8 +1,8 @@
 import './globals.css';
 
 export const metadata = {
-  title: 'สมุดสอนพิเศษ',
-  description: 'จัดตาราง คิดค่าสอน แจ้งผู้ปกครอง',
+  title: 'Dolla Tutor — Teaching Studio',
+  description: 'จัดการนักเรียน ตารางสอน บันทึกคาบเรียน ค่าสอน และรายงานสำหรับผู้ปกครอง',
 };
 
 export default function RootLayout({ children }) {
