@@ -20,7 +20,7 @@ export default function TeachingHub({students=[],schedule=[],sessions=[],excepti
   const [showLessonForm,setShowLessonForm] = useState(false);
   const [query,setQuery] = useState('');
   const [scheduleForm,setScheduleForm] = useState({studentId:'',recurring:true,day:dayIndex(new Date()),date:keyOf(new Date()),start:'10:00',end:'11:00'});
-  const [lessonForm,setLessonForm] = useState({studentId:'',date:keyOf(new Date()),hours:'1',note:''});
+  const [lessonForm,setLessonForm] = useState({studentId:'',date:keyOf(new Date()),hours:'1',note:'',sourceSlotId:''});
   const [busy,setBusy] = useState(false);
   const monthKey = `${month.getFullYear()}-${String(month.getMonth()+1).padStart(2,'0')}`;
   const activeStudents = students.filter(s=>(s.status||'active')==='active');
@@ -44,7 +44,7 @@ export default function TeachingHub({students=[],schedule=[],sessions=[],excepti
   const selectedEntries=entriesFor(selectedDate);
   const monthSlots=calendarDays.filter(d=>d.getMonth()===month.getMonth()).reduce((sum,d)=>sum+entriesFor(keyOf(d)).slots.length,0);
   const openLesson = (studentId='',date=selectedDate,slot=null) => {
-    setLessonForm({studentId:studentId||slot?.studentId||'',date,hours:slot?String(Math.max(.5,(Number(slot.end?.slice(0,2))*60+Number(slot.end?.slice(3,5))-Number(slot.start?.slice(0,2))*60-Number(slot.start?.slice(3,5)))/60)):'1',note:''});
+    setLessonForm({studentId:studentId||slot?.studentId||'',date,hours:slot?String(Math.max(.5,(Number(slot.end?.slice(0,2))*60+Number(slot.end?.slice(3,5))-Number(slot.start?.slice(0,2))*60-Number(slot.start?.slice(3,5)))/60)):'1',note:'',sourceSlotId:slot?.id||''});
     setShowLessonForm(true);
   };
   useEffect(()=>{if(recordRequest){openLesson(recordRequest.slot?.studentId||'',recordRequest.date||selectedDate,recordRequest.slot||null);setView('calendar');clearRecordRequest?.();}},[recordRequest]);
@@ -61,7 +61,7 @@ export default function TeachingHub({students=[],schedule=[],sessions=[],excepti
     if(!student)return showToast?.('กรุณาเลือกนักเรียน');
     const duration=Number(lessonForm.hours); if(!(duration>0))return showToast?.('กรอกจำนวนชั่วโมงให้ถูกต้อง');
     setBusy(true);
-    const row={id:id(),studentId:student.id,studentName:student.name,date:lessonForm.date,hours:duration,rate:Number(student.rate)||0,note:lessonForm.note.trim(),invoiced:false,paid:false};
+    const row={id:id(),studentId:student.id,studentName:student.name,date:lessonForm.date,hours:duration,rate:Number(student.rate)||0,note:lessonForm.note.trim(),invoiced:false,paid:false,sourceSlotId:lessonForm.sourceSlotId||undefined};
     const ok=await updateSessions([...sessions,row]);
     setBusy(false);
     if(ok){setShowLessonForm(false);setSelectedDate(row.date);setMonth(new Date(parseDate(row.date).getFullYear(),parseDate(row.date).getMonth(),1));setView('calendar');showToast?.('บันทึกคาบสอนแล้ว');}
