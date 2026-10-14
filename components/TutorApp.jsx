@@ -1392,7 +1392,16 @@ function LessonForm({initial={},students,onSave,onDelete,onCancel}) {
 function SessionsTab({ students, sessions, updateSessions, getStudent, showToast, recordRequest, clearRecordRequest }) {
   const [showForm,setShowForm]=useState(false);
   const [editing,setEditing]=useState(null);
-  const sorted=[...sessions].sort((a,b)=>b.date.localeCompare(a.date));
+  const [search,setSearch]=useState('');
+  const sorted=[...sessions].sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
+  const currentMonth=todayStr().slice(0,7);
+  const monthSessions=sessions.filter(s=>String(s.date||'').startsWith(currentMonth));
+  const unpaid=sessions.filter(s=>!s.paid);
+  const unpaidTotal=unpaid.reduce((sum,s)=>sum+Number(s.hours||0)*Number(s.rate||0),0);
+  const visibleSessions=sorted.filter(s=>{
+    const name=getStudent(s.studentId)?.name||s.studentName||'';
+    return !search.trim() || (name+' '+(s.note||'')+' '+(s.date||'')).toLowerCase().includes(search.trim().toLowerCase());
+  });
   useEffect(()=>{
     if(!recordRequest?.slot)return;
     const slot=recordRequest.slot;
@@ -1415,17 +1424,30 @@ function SessionsTab({ students, sessions, updateSessions, getStudent, showToast
     const saved=await updateSessions(sessions.filter(s=>s.id!==id),[id]);
     if(saved){cancel();showToast('ลบคาบสอนแล้ว');}
   };
-  const togglePaid=s=>updateSessions(sessions.map(x=>x.id===s.id?{...x,paid:!x.paid}:x));
-  return <div>
-    <div className="mb-5 flex items-center justify-between gap-3"><SectionTitle sub="บันทึกสิ่งที่สอน ผลการเรียน และสิ่งที่ต้องติดตาม">บันทึกคาบสอน</SectionTitle><button onClick={()=>{setEditing(null);setShowForm(true);}} disabled={!students.length} style={{background:C.pine,color:C.paper}} className="flex h-fit items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium disabled:opacity-40"><Plus size={16}/>เพิ่มคาบสอน</button></div>
-    {sorted.length===0&&<EmptyState text="ยังไม่มีบันทึกคาบสอน"/>}
-    <div className="flex flex-col">{sorted.map((s,i)=>{
-      const name=getStudent(s.studentId)?.name||s.studentName||'ไม่ทราบชื่อ';
-      return <div key={s.id} style={{borderBottom:i<sorted.length-1?'1px dashed '+C.line:'none'}} className="flex flex-col justify-between gap-3 py-4 sm:flex-row sm:items-start">
-        <div className="min-w-0 flex-1"><div className="text-sm font-medium">{name}</div><div className="text-xs" style={{color:C.inkSoft}}>{fmtDateThai(s.date)} · {fmtHours(s.hours)} ชม.</div>{s.note?<div className="mt-2 whitespace-pre-wrap text-sm leading-7" style={{color:C.inkSoft,overflowWrap:'anywhere'}}>{s.note}</div>:<div className="mt-2 text-xs" style={{color:C.gold}}>ยังไม่มีโน้ต</div>}</div>
-        <div className="flex shrink-0 flex-wrap items-center gap-3"><span className="text-sm font-medium" style={{color:C.gold}}>{fmtMoney(Number(s.hours||0)*Number(s.rate||0))}</span>{s.invoiced&&<span className="text-xs" style={{color:C.inkSoft}}>แจ้งแล้ว</span>}<button onClick={()=>togglePaid(s)} style={s.paid?{color:C.pine}:{color:C.brick}} className="flex items-center gap-1 text-xs font-medium">{s.paid?<><CheckCircle2 size={14}/>จ่ายแล้ว</>:<><Circle size={14}/>ยังไม่จ่าย</>}</button><button onClick={()=>{setEditing(s);setShowForm(true);}} className="flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs" style={{background:C.pineTint,color:C.pineDark}}><Pencil size={13}/>แก้โน้ต</button><button onClick={()=>remove(s.id)} aria-label="ลบคาบสอน" style={{color:C.inkSoft}} className="p-1"><Trash2 size={14}/></button></div>
-      </div>;
-    })}</div>
+  const togglePaid=async s=>{await updateSessions(sessions.map(x=>x.id===s.id?{...x,paid:!x.paid}:x));};
+  return <div className="sessions-page">
+    <section className="sessions-hero">
+      <div className="sessions-hero-copy"><div className="sessions-eyebrow">TEACHING JOURNAL / บันทึกการสอน</div><h1>ทุกคาบมีความหมาย</h1><p>เก็บสิ่งที่เรียนรู้ ความก้าวหน้า และค่าเรียนไว้ในที่เดียว</p></div>
+      <button onClick={()=>{setEditing(null);setShowForm(true);}} disabled={!students.length} className="sessions-primary-action"><Plus size={17}/> บันทึกคาบใหม่</button>
+    </section>
+    <section className="sessions-metrics">
+      <article className="sessions-metric"><span>คาบที่บันทึกทั้งหมด</span><strong>{sessions.length}</strong><small>คาบเรียนในระบบ</small></article>
+      <article className="sessions-metric"><span>คาบเดือนนี้</span><strong>{monthSessions.length}</strong><small>ตั้งแต่ต้นเดือน</small></article>
+      <article className="sessions-metric sessions-metric-attention"><span>ยอดที่ยังไม่ชำระ</span><strong>{fmtMoney(unpaidTotal)}</strong><small>{unpaid.length} คาบที่ต้องติดตาม</small></article>
+    </section>
+    <section className="sessions-list-panel">
+      <div className="sessions-list-heading"><div><h2>ประวัติคาบเรียน</h2><p>รายละเอียดการสอนและยอดค่าเรียนของแต่ละครั้ง</p></div><label className="sessions-search"><span>ค้นหาคาบเรียน</span><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="ชื่อนักเรียน หัวข้อ หรือวันที่…"/></label></div>
+      {sessions.length===0&&<EmptyState text="ยังไม่มีบันทึกคาบสอน"/>}
+      {sessions.length>0&&visibleSessions.length===0&&<div className="sessions-empty-search">ไม่พบคาบเรียนที่ตรงกับคำค้นหา</div>}
+      <div className="sessions-record-list">{visibleSessions.map(s=>{
+        const name=getStudent(s.studentId)?.name||s.studentName||'ไม่ทราบชื่อ';
+        return <article key={s.id} className="sessions-record">
+          <div className="sessions-record-date"><span>{fmtDateThai(s.date)}</span><small>{fmtHours(s.hours)} ชม.</small></div>
+          <div className="sessions-record-body"><div className="sessions-record-title">{name}</div>{s.note?<div className="sessions-record-note">{s.note}</div>:<div className="sessions-record-no-note">ยังไม่ได้เพิ่มรายละเอียดการสอน</div>}<div className="sessions-record-tags"><span>{s.invoiced?'แจ้งค่าสอนแล้ว':'ยังไม่ออกใบแจ้ง'}</span><span className={s.paid?'is-paid':'is-unpaid'}>{s.paid?'ชำระแล้ว':'รอชำระ'}</span></div></div>
+          <div className="sessions-record-actions"><strong>{fmtMoney(Number(s.hours||0)*Number(s.rate||0))}</strong><div><button onClick={()=>togglePaid(s)} className={s.paid?'sessions-action-muted':'sessions-action-pay'}>{s.paid?'ทำเครื่องหมายรอชำระ':'✓ บันทึกว่าชำระแล้ว'}</button><button onClick={()=>{setEditing(s);setShowForm(true);}} className="sessions-action-edit"><Pencil size={14}/> แก้ไข</button><button onClick={()=>remove(s.id)} aria-label="ลบคาบสอน" className="sessions-action-delete"><Trash2 size={14}/></button></div></div>
+        </article>;
+      })}</div>
+    </section>
     {showForm&&<LessonForm initial={editing||{}} students={students} onSave={save} onDelete={editing?remove:undefined} onCancel={cancel}/>}
   </div>;
 }
