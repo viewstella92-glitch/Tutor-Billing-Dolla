@@ -10,7 +10,6 @@ const money = n => '฿' + Math.round(Number(n)||0).toLocaleString('th-TH');
 const keyOf = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 const parseDate = s => new Date(`${s}T12:00:00`);
 const dayIndex = d => (d.getDay()+6)%7;
-const hours = (a,b) => Math.max(0,(Number(b.slice(0,2))*60+Number(b.slice(3,5)-Number(a.slice(0,2))*60-Number(a.slice(3,5)))/60);
 const id = () => crypto.randomUUID();
 
 export default function TeachingHub({students=[],schedule=[],sessions=[],exceptions=[],updateSchedule,updateSessions,updateExceptions,showToast}) {
