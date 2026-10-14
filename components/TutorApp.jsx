@@ -46,7 +46,7 @@ function fmtDateThai(dateStr) {
   const d = new Date(dateStr + 'T00:00:00');
   return `${d.getDate()} ${MONTHS_TH[d.getMonth()]} ${d.getFullYear() + 543}`;
 }
-function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+function uid() { return typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, ch => { const r = Math.random() * 16 | 0; return (ch === 'x' ? r : (r & 3 | 8)).toString(16); }); }
 function daysBetween(dateStr, todayIso) { return Math.floor((new Date(todayIso) - new Date(dateStr)) / 86400000); }
 
 export default function App() {
@@ -1358,8 +1358,8 @@ function LessonForm({initial={},students,onSave,onDelete,onCancel}) {
       :<input value={form[key]} onChange={e=>set(key,e.target.value)} placeholder={placeholder} className={textInput+' mt-1'} style={fieldStyle}/>}
     </label>
   );
-  return <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4" style={{background:'rgba(35,40,43,.45)'}}>
-    <div role="dialog" aria-modal="true" aria-label={editing?'แก้ไขบันทึกคาบสอน':'บันทึกคาบสอน'} className="w-full overflow-y-auto overscroll-contain rounded-t-2xl p-5 pb-32 sm:max-w-xl sm:rounded-2xl sm:p-6" style={{background:C.surface,maxHeight:'90dvh'}}>
+  return <div className="lesson-form-overlay fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4" style={{background:'rgba(20,35,27,.52)',backdropFilter:'blur(5px)'}}>
+    <div role="dialog" aria-modal="true" aria-label={editing?'แก้ไขบันทึกคาบสอน':'บันทึกคาบสอน'} className="lesson-form-dialog w-full overflow-y-auto overscroll-contain rounded-t-2xl p-5 pb-8 sm:max-w-2xl sm:rounded-2xl sm:p-7" style={{background:C.surface,maxHeight:'92dvh'}}>
       <div className="mb-4 flex items-center justify-between"><div><h2 className="text-lg font-semibold" style={{color:C.ink}}>{editing?'แก้ไขบันทึกคาบสอน':'บันทึกคาบสอน'}</h2><p className="mt-1 text-xs" style={{color:C.inkSoft}}>{editing?'แก้ไขรายละเอียดของคาบเดิม':'ตรวจสอบข้อมูลคาบ แล้วบันทึกเมื่อพร้อม'}</p></div><button type="button" onClick={onCancel} aria-label="ปิดฟอร์ม" className="rounded-lg p-2" style={{color:C.inkSoft}}><X size={18}/></button></div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <label className="mb-1 block text-xs" style={{color:C.inkSoft}}>นักเรียน<select value={form.studentId} onChange={e=>{const s=students.find(x=>x.id===e.target.value);setForm(p=>({...p,studentId:e.target.value,rate:p.rate===''?String(s?.rate??0):p.rate}));}} className={textInput+' mt-1'} style={fieldStyle}><option value="">เลือกนักเรียน</option>{students.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
@@ -1376,12 +1376,12 @@ function LessonForm({initial={},students,onSave,onDelete,onCancel}) {
       {field('จุดที่ยังติด / ควรทบทวน','stuck','เรื่องที่ควรทบทวนเพิ่มเติม',true)}
       {field('การบ้าน / สิ่งที่ต้องทำต่อ','homework','แบบฝึกหัดหรือสิ่งที่ต้องเตรียม',true)}
       {field('แผนการเรียนคาบถัดไป','nextPlan','หัวข้อหรือทักษะที่จะต่อยอดในครั้งหน้า',true)}
-      <div className="my-3 border-t pt-3" style={{borderColor:C.line}}><div className="mb-2 text-sm font-semibold" style={{color:C.pineDark}}>English details (optional)</div>
+      <details className="lesson-form-english my-3 border-t pt-3" style={{borderColor:C.line}}><summary className="cursor-pointer py-2 text-sm font-semibold" style={{color:C.pineDark}}>รายละเอียดภาษาอังกฤษ (ไม่บังคับ)</summary><div className="pt-3">
         {field('Lesson topic (EN)','enTopic','e.g. Linear equations',true)}
         {field('Learning outcome (EN)','enPerformance','What the student understood',true)}
         {field('Needs more practice (EN)','enStuck','Topics to review',true)}
         {field('Homework / next steps (EN)','enHomework','Homework for next lesson',true)}
-      </div>
+      </div></details>
       {field('โน้ตเพิ่มเติม','note','รายละเอียดเพิ่มเติมสำหรับผู้ปกครอง',true)}
       {note&&<div className="mb-3 rounded-xl p-3 text-sm leading-6" style={{background:C.paper,border:'1px solid '+C.line,whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}><div className="mb-1 text-xs" style={{color:C.inkSoft}}>ตัวอย่างบันทึกที่จะถูกเก็บ</div>{note}</div>}
       <div className="mt-4 flex flex-wrap gap-2"><button type="button" onClick={onCancel} className="flex-1 rounded-lg py-2.5 text-sm" style={{border:'1px solid '+C.line,color:C.inkSoft}}>ยกเลิก</button>{editing&&onDelete&&<button type="button" onClick={()=>onDelete(initial.id)} className="rounded-lg px-4 py-2.5 text-sm" style={{background:C.brickTint,color:C.brick}}>ลบคาบ</button>}<button type="button" disabled={!valid||busy} onClick={submit} className="flex-1 rounded-lg py-2.5 text-sm font-medium disabled:opacity-40" style={{background:C.pine,color:C.paper}}>{busy?'กำลังบันทึก…':'บันทึกคาบนี้'}</button></div>
