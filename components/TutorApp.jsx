@@ -1260,12 +1260,12 @@ function LessonPlanner({ student, sessions, duration, setDuration, onClose }) {
 // ---------- Schedule ----------
 // ---------- Sessions log ----------
 function parseLessonNote(note='') {
-  const out={subject:'',topic:'',performance:'',score:'',stuck:'',homework:'',enTopic:'',enPerformance:'',enStuck:'',enHomework:'',note:''};
+  const out={subject:'',topic:'',performance:'',strengths:'',score:'',stuck:'',homework:'',nextPlan:'',enTopic:'',enPerformance:'',enStuck:'',enHomework:'',note:''};
   const extra=[];
   String(note||'').split(/\r?\n/).forEach(line=>{
-    const m=line.match(/^(สอน|ผลการเรียน|คะแนน|ติดขัด|การบ้าน|EN topic|EN result|EN stuck|EN homework):\s*(.*)$/);
+    const m=line.match(/^(สอน|ผลการเรียน|จุดเด่น|คะแนน|ติดขัด|การบ้าน|แผนคาบหน้า|EN topic|EN result|EN stuck|EN homework):\s*(.*)$/);
     if(!m){if(line.trim())extra.push(line);return;}
-    const key={'ผลการเรียน':'performance','คะแนน':'score','ติดขัด':'stuck','การบ้าน':'homework','EN topic':'enTopic','EN result':'enPerformance','EN stuck':'enStuck','EN homework':'enHomework'}[m[1]];
+    const key={'ผลการเรียน':'performance','จุดเด่น':'strengths','คะแนน':'score','ติดขัด':'stuck','การบ้าน':'homework','แผนคาบหน้า':'nextPlan','EN topic':'enTopic','EN result':'enPerformance','EN stuck':'enStuck','EN homework':'enHomework'}[m[1]];
     if(m[1]==='สอน'){const p=m[2].split(' · ');out.subject=p.shift()||'';out.topic=p.join(' · ');}
     else if(key)out[key]=m[2];
   });
@@ -1291,9 +1291,11 @@ function LessonForm({initial={},students,onSave,onDelete,onCancel}) {
     const parts=[];
     if(form.subject||form.topic)parts.push('สอน: '+[form.subject,form.topic].filter(Boolean).join(' · '));
     if(form.performance)parts.push('ผลการเรียน: '+form.performance);
+    if(form.strengths)parts.push('จุดเด่น: '+form.strengths);
     if(form.score)parts.push('คะแนน: '+form.score);
     if(form.stuck)parts.push('ติดขัด: '+form.stuck);
     if(form.homework)parts.push('การบ้าน: '+form.homework);
+    if(form.nextPlan)parts.push('แผนคาบหน้า: '+form.nextPlan);
     if(form.enTopic)parts.push('EN topic: '+form.enTopic);
     if(form.enPerformance)parts.push('EN result: '+form.enPerformance);
     if(form.enStuck)parts.push('EN stuck: '+form.enStuck);
@@ -1337,9 +1339,11 @@ function LessonForm({initial={},students,onSave,onDelete,onCancel}) {
       {field('วิชา','subject',student?.subjects?.[0]||'เช่น คณิตศาสตร์')}
       {field('เรื่องที่สอน','topic','ระบุหัวข้อหรือเนื้อหาที่เรียน',true,true)}
       {field('ผลการเรียน / ทำได้แค่ไหน','performance','นักเรียนเข้าใจหรือทำอะไรได้แล้วบ้าง',true)}
+      {field('จุดเด่น / สิ่งที่ทำได้ดี','strengths','เช่น แก้สมการได้เอง อธิบายเหตุผลได้ดี',true)}
       {field('คะแนน (ถ้ามี)','score','เช่น 8/10')}
-      {field('จุดที่ยังติด','stuck','เรื่องที่ควรทบทวนเพิ่มเติม',true)}
+      {field('จุดที่ยังติด / ควรทบทวน','stuck','เรื่องที่ควรทบทวนเพิ่มเติม',true)}
       {field('การบ้าน / สิ่งที่ต้องทำต่อ','homework','แบบฝึกหัดหรือสิ่งที่ต้องเตรียม',true)}
+      {field('แผนการเรียนคาบถัดไป','nextPlan','หัวข้อหรือทักษะที่จะต่อยอดในครั้งหน้า',true)}
       <div className="my-3 border-t pt-3" style={{borderColor:C.line}}><div className="mb-2 text-sm font-semibold" style={{color:C.pineDark}}>English details (optional)</div>
         {field('Lesson topic (EN)','enTopic','e.g. Linear equations',true)}
         {field('Learning outcome (EN)','enPerformance','What the student understood',true)}
