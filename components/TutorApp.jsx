@@ -223,10 +223,12 @@ export default function App() {
         if (error) throw error;
       }
       setSchedule(next);
+      return true;
     } catch (e) {
       console.error(e);
       setSchedule(previous);
       showToast(lang==='en'?'Could not save schedule':'บันทึกตารางสอนไม่สำเร็จ ข้อมูลเดิมยังแสดงอยู่');
+      return false;
     }
   };
 
