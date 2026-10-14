@@ -496,3 +496,22 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .thub-submit:disabled{opacity:.55}
 @media(max-width:1100px){.thub-layout{grid-template-columns:1fr}.thub-day-panel{min-height:0}.thub-schedule-row{grid-template-columns:1fr 1fr;gap:10px}.thub-schedule-rate{justify-self:start}.thub-delete-button{justify-self:end;grid-column:2;grid-row:2}}
 @media(max-width:640px){.thub{padding:12px}.thub-hero{border-radius:19px;padding:20px}.thub-hero-row{align-items:flex-start;flex-direction:column}.thub-main-action{padding:10px 12px}.thub-stats{gap:7px;margin-top:20px}.thub-stats>div{padding:10px 8px}.thub-stats span{font-size:9px;line-height:1.4}.thub-stats strong{font-size:16px}.thub-tabs{width:100%;display:grid;grid-template-columns:repeat(3,1fr)}.thub-tabs button{justify-content:center;gap:5px;padding:10px 4px;font-size:11px}.thub-calendar-panel,.thub-day-panel,.thub-manage-panel,.thub-history-panel{padding:13px;border-radius:15px}.thub-panel-head{align-items:flex-start;flex-direction:column}.thub-month-nav{width:100%;justify-content:space-between}.thub-day{min-height:61px;padding:5px 3px;gap:3px}.thub-day-event{font-size:8px;padding:2px}.thub-day-number{font-size:11px}.thub-calendar-foot{gap:8px}.thub-calendar-foot .thub-foot-total{width:100%;margin-left:0}.thub-search{width:100%;min-width:0}.thub-history-row{grid-template-columns:46px minmax(0,1fr);gap:10px}.thub-history-date{width:44px;height:52px}.thub-history-total{grid-column:2;align-items:flex-start;flex-direction:row;justify-content:space-between;align-items:center}.thub-schedule-row{grid-template-columns:minmax(0,1fr) auto}.thub-schedule-day,.thub-schedule-student,.thub-schedule-time,.thub-schedule-rate{grid-column:1}.thub-delete-button{grid-column:2;grid-row:1}.thub-modal{padding:23px 18px}.thub-form-grid{grid-template-columns:1fr 1fr}}
+
+
+/* Monthly teaching calendar forecast refinement */
+.thub-calendar-panel>.thub-panel-head{display:block;margin-bottom:18px}
+.thub-calendar-panel>.thub-panel-head .thub-calendar-subtitle{margin:5px 0 0;color:#7e8b7f;font-size:12px}
+.thub-calendar-panel>.thub-panel-head .thub-month-nav{float:right;margin-top:-44px}
+.thub-day-income{display:block;margin-top:auto;padding-top:2px;color:#2d6843;font-size:9px;font-weight:800;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.thub-day.is-selected .thub-day-income{color:#214f31}
+.thub-forecast-strip{display:grid;grid-template-columns:44px minmax(160px,1fr) minmax(200px,.9fr);align-items:center;gap:14px;margin-top:18px;padding:18px;border:1px solid #dce9d9;border-radius:16px;background:linear-gradient(110deg,#f0f7ed 0%,#fbfcf9 100%)}
+.thub-forecast-icon{display:grid;place-items:center;width:42px;height:42px;border-radius:13px;background:#dfeedd;color:#367048}
+.thub-forecast-copy{display:flex;flex-direction:column;gap:4px;min-width:0}
+.thub-forecast-copy>span{color:#617964;font-size:11px;font-weight:750}
+.thub-forecast-copy>strong{color:#245a36;font-size:clamp(23px,2.3vw,31px);letter-spacing:-.045em;line-height:1.15}
+.thub-forecast-copy>small{color:#879287;font-size:10px;line-height:1.5}
+.thub-forecast-breakdown{display:grid;grid-template-columns:1fr 1fr;gap:10px;border-left:1px solid #dce7d9;padding-left:15px}
+.thub-forecast-breakdown>div{display:flex;flex-direction:column;gap:6px;min-width:0}
+.thub-forecast-breakdown span{font-size:10px;color:#829083;line-height:1.4}
+.thub-forecast-breakdown strong{font-size:14px;color:#3c6544;overflow-wrap:anywhere}
+@media(max-width:760px){.thub-calendar-panel>.thub-panel-head .thub-month-nav{float:none;margin-top:14px}.thub-forecast-strip{grid-template-columns:38px minmax(0,1fr);gap:10px;padding:14px}.thub-forecast-icon{width:36px;height:36px}.thub-forecast-breakdown{grid-column:1/-1;border-left:0;border-top:1px solid #dce7d9;padding:12px 0 0;margin-top:3px}.thub-day-income{font-size:8px}}
