@@ -51,6 +51,7 @@ function daysBetween(dateStr, todayIso) { return Math.floor((new Date(todayIso) 
 
 export default function App() {
   const [tab, setTab] = useState('dashboard');
+  const [openNavGroup, setOpenNavGroup] = useState('overview');
   const [recordRequest, setRecordRequest] = useState(null);
   const [students, setStudents] = useState([]);
   const [schedule, setSchedule] = useState([]);
@@ -220,18 +221,45 @@ export default function App() {
 
   const getStudent = (id) => students.find((s) => s.id === id);
 
-  const NAV = [
-    { id: 'dashboard', label: lang==='en' ? 'Dashboard' : 'ภาพรวม', icon: LayoutDashboard },
-    { id: 'progress', label: lang==='en' ? 'Progress' : 'พัฒนาการ', icon: TrendingUp },
-    { id: 'alerts', label: lang==='en' ? 'Alerts' : 'แจ้งเตือน', icon: Bell },
-    { id: 'business', label: lang==='en' ? 'Business' : 'ธุรกิจ', icon: BarChart },
-    { id: 'students', label: lang==='en' ? 'Students' : 'นักเรียน', icon: Users },
-    { id: 'schedule', label: lang==='en' ? 'Schedule' : 'ตารางสอน', icon: CalendarDays },
-    { id: 'plan', label: lang==='en' ? 'Monthly plan' : 'แพลนรายเดือน', icon: CalendarDays },
-    { id: 'sessions', label: lang==='en' ? 'Lessons' : 'บันทึกคาบสอน', icon: ClipboardList },
-    { id: 'invoice', label: lang==='en' ? 'Invoices' : 'แจ้งค่าสอน', icon: Receipt },
-    { id: 'export', label: lang==='en' ? 'Export' : 'ส่งออกข้อมูล', icon: Download },
+  const NAV_GROUPS = [
+    { id:'overview', label:lang==='en'?'Overview':'ภาพรวม', icon:LayoutDashboard, items:[{id:'dashboard',label:lang==='en'?'Dashboard':'หน้าหลัก',icon:LayoutDashboard}] },
+    { id:'students', label:lang==='en'?'Students':'นักเรียน', icon:Users, items:[{id:'students',label:lang==='en'?'Student profiles':'ข้อมูลนักเรียน',icon:Users}] },
+    { id:'teaching', label:lang==='en'?'Teaching':'การสอน', icon:CalendarDays, items:[
+      {id:'schedule',label:lang==='en'?'Weekly schedule':'ตารางสอน',icon:CalendarDays},
+      {id:'plan',label:lang==='en'?'Monthly planner':'แพลนรายเดือน',icon:CalendarDays},
+      {id:'sessions',label:lang==='en'?'Lesson records':'บันทึกคาบเรียน',icon:ClipboardList},
+    ]},
+    { id:'finance', label:lang==='en'?'Finance':'การเงิน', icon:Receipt, items:[
+      {id:'invoice',label:lang==='en'?'Parent invoices':'ใบแจ้งค่าสอน',icon:Receipt},
+      {id:'business',label:lang==='en'?'Income overview':'สรุปรายได้',icon:BarChart},
+    ]},
+    { id:'reports', label:lang==='en'?'Reports':'รายงาน', icon:ClipboardList, items:[
+      {id:'progress',label:lang==='en'?'Learning progress':'พัฒนาการ',icon:TrendingUp},
+      {id:'alerts',label:lang==='en'?'Follow-up list':'รายการติดตาม',icon:Bell},
+      {id:'export',label:lang==='en'?'Export data':'ส่งออกข้อมูล',icon:Download},
+    ]},
   ];
+  const activeGroup = NAV_GROUPS.find(group => group.items.some(item => item.id === tab))?.id || 'overview';
+  const renderNavigation = (compact = false) => NAV_GROUPS.map(group => {
+    const GroupIcon = group.icon;
+    const isOpen = openNavGroup === group.id || activeGroup === group.id;
+    const isActive = activeGroup === group.id;
+    return <div key={group.id} className="nav-group">
+      <button type="button" onClick={() => {
+        if (group.items.length === 1) { setTab(group.items[0].id); setOpenNavGroup(group.id); }
+        else setOpenNavGroup(current => current === group.id ? '' : group.id);
+      }} aria-expanded={isOpen} className={`nav-group-trigger ${isActive ? 'is-active' : ''} ${compact ? 'is-compact' : ''}`}>
+        <GroupIcon size={compact ? 16 : 17} />
+        <span>{group.label}</span>
+        {group.items.length > 1 && <span className="nav-group-count">{group.items.length}</span>}
+      </button>
+      {group.items.length > 1 && isOpen && <div className="nav-subitems">
+        {group.items.map(item => { const ItemIcon = item.icon; return <button type="button" key={item.id} onClick={() => {setTab(item.id);setOpenNavGroup(group.id);}} className={`nav-subitem ${tab === item.id ? 'is-current' : ''}`}>
+          <ItemIcon size={15} /><span>{item.label}</span>
+        </button>; })}
+      </div>}
+    </div>;
+  });
 
   if (!loaded) {
     return (
@@ -242,51 +270,21 @@ export default function App() {
   }
 
   return (
-    <div style={{ background: C.paper, color: C.ink }} className="w-full min-h-screen flex flex-col md:flex-row font-sans">
+    <div style={{ background: C.paper, color: C.ink }} className="tutor-workspace w-full min-h-screen flex flex-col md:flex-row font-sans">
       {/* Desktop sidebar */}
       <div style={{ borderRight: `1px solid ${C.line}` }} className="hidden md:flex md:w-56 md:flex-col md:py-6 md:px-4 md:sticky md:top-0 md:h-screen shrink-0">
         <div className="px-2 mb-8">
           <div style={{ color: C.pine }} className="text-lg font-semibold leading-tight">สมุดสอนพิเศษ</div>
           <div style={{ color: C.inkSoft }} className="text-xs mt-1">จัดตาราง คิดค่าสอน แจ้งผู้ปกครอง</div>
         </div>
-        <nav className="flex flex-col gap-1">
-          {NAV.map((n) => {
-            const Icon = n.icon;
-            const active = tab === n.id;
-            return (
-              <button
-                key={n.id}
-                onClick={() => setTab(n.id)}
-                style={active ? { background: C.pineTint, color: C.pineDark } : { color: C.inkSoft }}
-                className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors text-left"
-              >
-                <Icon size={17} />
-                {n.label}
-              </button>
-            );
-          })}
+        <nav className="flex flex-col gap-2">
+          {renderNavigation()}
         </nav>
       </div>
 
       {/* Mobile top nav */}
-      <div style={{ borderBottom: `1px solid ${C.line}`, background: C.paper }} className="md:hidden sticky top-0 z-20 overflow-x-auto">
-        <div className="flex gap-1 px-3 py-3 min-w-max">
-          {NAV.map((n) => {
-            const Icon = n.icon;
-            const active = tab === n.id;
-            return (
-              <button
-                key={n.id}
-                onClick={() => setTab(n.id)}
-                style={active ? { background: C.pineTint, color: C.pineDark } : { color: C.inkSoft }}
-                className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap"
-              >
-                <Icon size={16} />
-                {n.label}
-              </button>
-            );
-          })}
-        </div>
+      <div className="md:hidden sticky top-0 z-20 mobile-nav">
+        <div className="mobile-nav-groups">{renderNavigation(true)}</div>
       </div>
 
       <div className="flex-1 px-4 py-4 md:px-10 md:py-6 max-w-5xl mx-auto w-full">
