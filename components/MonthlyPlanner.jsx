@@ -52,7 +52,7 @@ export default function MonthlyPlanner({ students=[], schedule=[], sessions=[], 
   };
   const colors = new Map(activeStudents.map((s,i)=>[s.id,PALETTE[i%PALETTE.length]]));
 
-  return <div className="space-y-4">
+  return <div className="monthly-planner space-y-4">
     <header className="flex flex-wrap items-start justify-between gap-3">
       <div><h1 className="text-xl font-semibold">{labels.title}</h1><p className="mt-1 text-sm" style={{color:C.inkSoft}}>{labels.subtitle}</p></div>
       <div className="flex items-center gap-2">
