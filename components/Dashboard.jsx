@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import { CalendarDays, CircleDollarSign, ClipboardList, Receipt, Users, ArrowRight, CheckCircle2, Circle, Ban, BookOpen } from 'lucide-react';
+import { CalendarDays, CircleDollarSign, ClipboardList, Receipt, Users, ArrowRight, CheckCircle2, Circle, Ban, BookOpen, TrendingUp } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { buildMonthlyForecast, buildNineMonthChart, dateKey, monthKey } from '../lib/forecast';
 
