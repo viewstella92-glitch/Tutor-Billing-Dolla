@@ -51,6 +51,7 @@ function daysBetween(dateStr, todayIso) { return Math.floor((new Date(todayIso) 
 
 export default function App() {
   const [tab, setTab] = useState('dashboard');
+  const [openNavGroup, setOpenNavGroup] = useState('overview');
   const [recordRequest, setRecordRequest] = useState(null);
   const [students, setStudents] = useState([]);
   const [schedule, setSchedule] = useState([]);
@@ -143,17 +144,24 @@ export default function App() {
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 2200); };
 
   const updateExceptions = async (next, deletedIds = []) => {
-    setExceptions(next);
+    const previous = exceptions;
     try {
-      for (const id of deletedIds) {
-        const { error } = await supabase.from('tutor_slot_exceptions').delete().eq('id', id).eq('user_id', OWNER_ID);
-        if (error) throw error;
-      }
       if (next.length) {
         const { error } = await supabase.from('tutor_slot_exceptions').upsert(next.map(x => ({ id:x.id, user_id:OWNER_ID, slot_id:x.slotId, date:x.date, status:x.status || 'cancelled' })), { onConflict:'id' });
         if (error) throw error;
       }
-    } catch (e) { console.error(e); showToast(lang==='en'?'Could not save cancellation':'บันทึกสถานะยกเลิกไม่สำเร็จ'); }
+      for (const id of deletedIds) {
+        const { error } = await supabase.from('tutor_slot_exceptions').delete().eq('id', id).eq('user_id', OWNER_ID);
+        if (error) throw error;
+      }
+      setExceptions(next);
+      return true;
+    } catch (e) {
+      console.error(e);
+      setExceptions(previous);
+      showToast(lang==='en'?'Could not save cancellation':'บันทึกสถานะยกเลิกไม่สำเร็จ ข้อมูลเดิมยังแสดงอยู่');
+      return false;
+    }
   };
 
   const saveSettings = async (next) => {
@@ -185,19 +193,45 @@ export default function App() {
   };
 
   const updateStudents = async (next, deletedIds = []) => {
-    setStudents(next);
+    const previous = students;
     try {
-      for (const id of deletedIds) { const { error } = await supabase.from('tutor_students').delete().eq('id', id).eq('user_id', OWNER_ID); if (error) throw error; }
-      if (next.length) await supabase.from('tutor_students').upsert(next.map(x => ({ id:x.id, user_id:OWNER_ID, name:x.name, rate:Number(x.rate), grade:x.grade||null, subjects:Array.isArray(x.subjects)?x.subjects:[], goals:x.goals||null, strengths:x.strengths||null, weaknesses:x.weaknesses||null, learning_style:x.learningStyle||null, notes:x.notes||null, status:x.status||'active', target_exam:x.targetExam||null, target_date:x.targetDate||null, baseline_score:x.baselineScore===''||x.baselineScore==null?null:Number(x.baselineScore), latest_score:x.latestScore===''||x.latestScore==null?null:Number(x.latestScore), target_score:x.targetScore===''||x.targetScore==null?null:Number(x.targetScore) })));
-    } catch (e) { console.error(e); showToast('บันทึกนักเรียนไม่สำเร็จ'); }
+      if (next.length) {
+        const { error } = await supabase.from('tutor_students').upsert(next.map(x => ({ id:x.id, user_id:OWNER_ID, name:x.name, rate:Number(x.rate), grade:x.grade||null, subjects:Array.isArray(x.subjects)?x.subjects:[], goals:x.goals||null, strengths:x.strengths||null, weaknesses:x.weaknesses||null, learning_style:x.learningStyle||null, notes:x.notes||null, status:x.status||'active', target_exam:x.targetExam||null, target_date:x.targetDate||null, baseline_score:x.baselineScore===''||x.baselineScore==null?null:Number(x.baselineScore), latest_score:x.latestScore===''||x.latestScore==null?null:Number(x.latestScore), target_score:x.targetScore===''||x.targetScore==null?null:Number(x.targetScore) })), { onConflict:'id' });
+        if (error) throw error;
+      }
+      for (const id of deletedIds) {
+        const { error } = await supabase.from('tutor_students').delete().eq('id', id).eq('user_id', OWNER_ID);
+        if (error) throw error;
+      }
+      setStudents(next);
+      return true;
+    } catch (e) {
+      console.error(e);
+      setStudents(previous);
+      showToast(lang==='en'?'Could not save student changes':'บันทึกข้อมูลนักเรียนไม่สำเร็จ ข้อมูลเดิมยังแสดงอยู่');
+      return false;
+    }
   };
 
   const updateSchedule = async (next, deletedIds = []) => {
-    setSchedule(next);
+    const previous = schedule;
     try {
-      for (const id of deletedIds) { const { error } = await supabase.from('tutor_schedule').delete().eq('id', id).eq('user_id', OWNER_ID); if (error) throw error; }
-      if (next.length) await supabase.from('tutor_schedule').upsert(next.map(x => ({ id:x.id, user_id:OWNER_ID, student_id:x.studentId, recurring:Boolean(x.recurring), day:x.recurring?Number(x.day):null, date:x.recurring?null:x.date, start_time:x.start, end_time:x.end })));
-    } catch (e) { console.error(e); showToast('บันทึกตารางสอนไม่สำเร็จ'); }
+      if (next.length) {
+        const { error } = await supabase.from('tutor_schedule').upsert(next.map(x => ({ id:x.id, user_id:OWNER_ID, student_id:x.studentId, recurring:Boolean(x.recurring), day:x.recurring?Number(x.day):null, date:x.recurring?null:x.date, start_time:x.start, end_time:x.end })), { onConflict:'id' });
+        if (error) throw error;
+      }
+      for (const id of deletedIds) {
+        const { error } = await supabase.from('tutor_schedule').delete().eq('id', id).eq('user_id', OWNER_ID);
+        if (error) throw error;
+      }
+      setSchedule(next);
+      return true;
+    } catch (e) {
+      console.error(e);
+      setSchedule(previous);
+      showToast(lang==='en'?'Could not save schedule':'บันทึกตารางสอนไม่สำเร็จ ข้อมูลเดิมยังแสดงอยู่');
+      return false;
+    }
   };
 
   const updateSessions = async (next, deletedIds = []) => {
@@ -220,18 +254,46 @@ export default function App() {
 
   const getStudent = (id) => students.find((s) => s.id === id);
 
-  const NAV = [
-    { id: 'dashboard', label: lang==='en' ? 'Dashboard' : 'ภาพรวม', icon: LayoutDashboard },
-    { id: 'progress', label: lang==='en' ? 'Progress' : 'พัฒนาการ', icon: TrendingUp },
-    { id: 'alerts', label: lang==='en' ? 'Alerts' : 'แจ้งเตือน', icon: Bell },
-    { id: 'business', label: lang==='en' ? 'Business' : 'ธุรกิจ', icon: BarChart },
-    { id: 'students', label: lang==='en' ? 'Students' : 'นักเรียน', icon: Users },
-    { id: 'schedule', label: lang==='en' ? 'Schedule' : 'ตารางสอน', icon: CalendarDays },
-    { id: 'plan', label: lang==='en' ? 'Monthly plan' : 'แพลนรายเดือน', icon: CalendarDays },
-    { id: 'sessions', label: lang==='en' ? 'Lessons' : 'บันทึกคาบสอน', icon: ClipboardList },
-    { id: 'invoice', label: lang==='en' ? 'Invoices' : 'แจ้งค่าสอน', icon: Receipt },
-    { id: 'export', label: lang==='en' ? 'Export' : 'ส่งออกข้อมูล', icon: Download },
+  const NAV_GROUPS = [
+    { id:'overview', label:lang==='en'?'Overview':'ภาพรวม', icon:LayoutDashboard, items:[{id:'dashboard',label:lang==='en'?'Dashboard':'หน้าหลัก',icon:LayoutDashboard}] },
+    { id:'students', label:lang==='en'?'Students':'นักเรียน', icon:Users, items:[{id:'students',label:lang==='en'?'Student profiles':'ข้อมูลนักเรียน',icon:Users}] },
+    { id:'teaching', label:lang==='en'?'Teaching':'การสอน', icon:CalendarDays, items:[
+      {id:'schedule',label:lang==='en'?'Weekly schedule':'ตารางสอน',icon:CalendarDays},
+      {id:'plan',label:lang==='en'?'Monthly planner':'แพลนรายเดือน',icon:CalendarDays},
+      {id:'sessions',label:lang==='en'?'Lesson records':'บันทึกคาบเรียน',icon:ClipboardList},
+    ]},
+    { id:'finance', label:lang==='en'?'Finance':'การเงิน', icon:Receipt, items:[
+      {id:'invoice',label:lang==='en'?'Parent invoices':'ใบแจ้งค่าสอน',icon:Receipt},
+      {id:'business',label:lang==='en'?'Income overview':'สรุปรายได้',icon:BarChart},
+    ]},
+    { id:'reports', label:lang==='en'?'Reports':'รายงาน', icon:ClipboardList, items:[
+      {id:'progress',label:lang==='en'?'Learning progress':'พัฒนาการ',icon:TrendingUp},
+      {id:'alerts',label:lang==='en'?'Follow-up list':'รายการติดตาม',icon:Bell},
+      {id:'export',label:lang==='en'?'Export data':'ส่งออกข้อมูล',icon:Download},
+    ]},
   ];
+  const activeGroup = NAV_GROUPS.find(group => group.items.some(item => item.id === tab))?.id || 'overview';
+  useEffect(() => { setOpenNavGroup(activeGroup); }, [activeGroup]);
+  const renderNavigation = (compact = false) => NAV_GROUPS.map(group => {
+    const GroupIcon = group.icon;
+    const isOpen = openNavGroup === group.id;
+    const isActive = activeGroup === group.id;
+    return <div key={group.id} className="nav-group">
+      <button type="button" onClick={() => {
+        if (group.items.length === 1) { setTab(group.items[0].id); setOpenNavGroup(group.id); }
+        else setOpenNavGroup(current => current === group.id ? '' : group.id);
+      }} aria-expanded={isOpen} className={`nav-group-trigger ${isActive ? 'is-active' : ''} ${compact ? 'is-compact' : ''}`}>
+        <GroupIcon size={compact ? 16 : 17} />
+        <span>{group.label}</span>
+        {group.items.length > 1 && <span className="nav-group-count">{group.items.length}</span>}
+      </button>
+      {group.items.length > 1 && isOpen && <div className="nav-subitems">
+        {group.items.map(item => { const ItemIcon = item.icon; return <button type="button" key={item.id} onClick={() => {setTab(item.id);setOpenNavGroup(group.id);}} className={`nav-subitem ${tab === item.id ? 'is-current' : ''}`}>
+          <ItemIcon size={15} /><span>{item.label}</span>
+        </button>; })}
+      </div>}
+    </div>;
+  });
 
   if (!loaded) {
     return (
@@ -242,51 +304,21 @@ export default function App() {
   }
 
   return (
-    <div style={{ background: C.paper, color: C.ink }} className="w-full min-h-screen flex flex-col md:flex-row font-sans">
+    <div style={{ background: C.paper, color: C.ink }} className="tutor-workspace w-full min-h-screen flex flex-col md:flex-row font-sans">
       {/* Desktop sidebar */}
       <div style={{ borderRight: `1px solid ${C.line}` }} className="hidden md:flex md:w-56 md:flex-col md:py-6 md:px-4 md:sticky md:top-0 md:h-screen shrink-0">
         <div className="px-2 mb-8">
           <div style={{ color: C.pine }} className="text-lg font-semibold leading-tight">สมุดสอนพิเศษ</div>
           <div style={{ color: C.inkSoft }} className="text-xs mt-1">จัดตาราง คิดค่าสอน แจ้งผู้ปกครอง</div>
         </div>
-        <nav className="flex flex-col gap-1">
-          {NAV.map((n) => {
-            const Icon = n.icon;
-            const active = tab === n.id;
-            return (
-              <button
-                key={n.id}
-                onClick={() => setTab(n.id)}
-                style={active ? { background: C.pineTint, color: C.pineDark } : { color: C.inkSoft }}
-                className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors text-left"
-              >
-                <Icon size={17} />
-                {n.label}
-              </button>
-            );
-          })}
+        <nav className="flex flex-col gap-2">
+          {renderNavigation()}
         </nav>
       </div>
 
       {/* Mobile top nav */}
-      <div style={{ borderBottom: `1px solid ${C.line}`, background: C.paper }} className="md:hidden sticky top-0 z-20 overflow-x-auto">
-        <div className="flex gap-1 px-3 py-3 min-w-max">
-          {NAV.map((n) => {
-            const Icon = n.icon;
-            const active = tab === n.id;
-            return (
-              <button
-                key={n.id}
-                onClick={() => setTab(n.id)}
-                style={active ? { background: C.pineTint, color: C.pineDark } : { color: C.inkSoft }}
-                className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap"
-              >
-                <Icon size={16} />
-                {n.label}
-              </button>
-            );
-          })}
-        </div>
+      <div className="md:hidden sticky top-0 z-20 mobile-nav">
+        <div className="mobile-nav-groups">{renderNavigation(true)}</div>
       </div>
 
       <div className="flex-1 px-4 py-4 md:px-10 md:py-6 max-w-5xl mx-auto w-full">
@@ -671,14 +703,17 @@ function StudentsTab({ students, updateStudents, sessions }) {
   const openEdit = (s) => { setForm({ ...emptyForm, ...s, subjects:Array.isArray(s.subjects)?s.subjects:[], baselineScore:s.baselineScore??'', latestScore:s.latestScore??'', targetScore:s.targetScore??'' }); setEditing(s.id); };
   const toggleSubject = (subject) => setForm((f) => ({ ...f, subjects:f.subjects.includes(subject)?f.subjects.filter(x=>x!==subject):[...f.subjects,subject] }));
 
-  const save = () => {
+  const save = async () => {
     const name=form.name.trim(), rate=parseFloat(form.rate);
-    if (!name || !rate || rate<=0) return;
+    if (!name || !Number.isFinite(rate) || rate<=0) return;
     const student={ id:editing==='new'?uid():editing, name, rate, grade:form.grade.trim(), subjects:form.subjects, goals:form.goals.trim(), strengths:form.strengths.trim(), weaknesses:form.weaknesses.trim(), learningStyle:form.learningStyle, notes:form.notes.trim(), status:form.status, targetExam:form.targetExam.trim(), targetDate:form.targetDate, baselineScore:form.baselineScore===''?'':Number(form.baselineScore), latestScore:form.latestScore===''?'':Number(form.latestScore), targetScore:form.targetScore===''?'':Number(form.targetScore) };
-    updateStudents(editing==='new'?[...students,student]:students.map(s=>s.id===editing?{...s,...student}:s));
-    setEditing(null);
+    const saved=await updateStudents(editing==='new'?[...students,student]:students.map(s=>s.id===editing?{...s,...student}:s));
+    if(saved) setEditing(null);
   };
-  const remove = (id) => { if(confirm('ลบนักเรียนคนนี้? ประวัติการสอนเดิมจะยังอยู่')) updateStudents(students.filter(s=>s.id!==id), [id]); };
+  const remove = async (id) => {
+    if(!confirm('ลบนักเรียนคนนี้? ประวัติการสอนเดิมจะยังอยู่')) return;
+    await updateStudents(students.filter(s=>s.id!==id), [id]);
+  };
   const subjectOptions=['คณิตศาสตร์','ฟิสิกส์','ภาษาอังกฤษ','ภาษาจีน','วิทยาศาสตร์'];
   const buildAnalysis = (s) => {
     const history = sessions.filter(x=>x.studentId===s.id).sort((a,b)=>a.date.localeCompare(b.date));
@@ -1234,12 +1269,12 @@ function LessonPlanner({ student, sessions, duration, setDuration, onClose }) {
 // ---------- Schedule ----------
 // ---------- Sessions log ----------
 function parseLessonNote(note='') {
-  const out={subject:'',topic:'',performance:'',score:'',stuck:'',homework:'',enTopic:'',enPerformance:'',enStuck:'',enHomework:'',note:''};
+  const out={subject:'',topic:'',performance:'',strengths:'',score:'',stuck:'',homework:'',nextPlan:'',enTopic:'',enPerformance:'',enStuck:'',enHomework:'',note:''};
   const extra=[];
   String(note||'').split(/\r?\n/).forEach(line=>{
-    const m=line.match(/^(สอน|ผลการเรียน|คะแนน|ติดขัด|การบ้าน|EN topic|EN result|EN stuck|EN homework):\s*(.*)$/);
+    const m=line.match(/^(สอน|ผลการเรียน|จุดเด่น|คะแนน|ติดขัด|การบ้าน|แผนคาบหน้า|EN topic|EN result|EN stuck|EN homework):\s*(.*)$/);
     if(!m){if(line.trim())extra.push(line);return;}
-    const key={'ผลการเรียน':'performance','คะแนน':'score','ติดขัด':'stuck','การบ้าน':'homework','EN topic':'enTopic','EN result':'enPerformance','EN stuck':'enStuck','EN homework':'enHomework'}[m[1]];
+    const key={'ผลการเรียน':'performance','จุดเด่น':'strengths','คะแนน':'score','ติดขัด':'stuck','การบ้าน':'homework','แผนคาบหน้า':'nextPlan','EN topic':'enTopic','EN result':'enPerformance','EN stuck':'enStuck','EN homework':'enHomework'}[m[1]];
     if(m[1]==='สอน'){const p=m[2].split(' · ');out.subject=p.shift()||'';out.topic=p.join(' · ');}
     else if(key)out[key]=m[2];
   });
@@ -1265,9 +1300,11 @@ function LessonForm({initial={},students,onSave,onDelete,onCancel}) {
     const parts=[];
     if(form.subject||form.topic)parts.push('สอน: '+[form.subject,form.topic].filter(Boolean).join(' · '));
     if(form.performance)parts.push('ผลการเรียน: '+form.performance);
+    if(form.strengths)parts.push('จุดเด่น: '+form.strengths);
     if(form.score)parts.push('คะแนน: '+form.score);
     if(form.stuck)parts.push('ติดขัด: '+form.stuck);
     if(form.homework)parts.push('การบ้าน: '+form.homework);
+    if(form.nextPlan)parts.push('แผนคาบหน้า: '+form.nextPlan);
     if(form.enTopic)parts.push('EN topic: '+form.enTopic);
     if(form.enPerformance)parts.push('EN result: '+form.enPerformance);
     if(form.enStuck)parts.push('EN stuck: '+form.enStuck);
@@ -1311,9 +1348,11 @@ function LessonForm({initial={},students,onSave,onDelete,onCancel}) {
       {field('วิชา','subject',student?.subjects?.[0]||'เช่น คณิตศาสตร์')}
       {field('เรื่องที่สอน','topic','ระบุหัวข้อหรือเนื้อหาที่เรียน',true,true)}
       {field('ผลการเรียน / ทำได้แค่ไหน','performance','นักเรียนเข้าใจหรือทำอะไรได้แล้วบ้าง',true)}
+      {field('จุดเด่น / สิ่งที่ทำได้ดี','strengths','เช่น แก้สมการได้เอง อธิบายเหตุผลได้ดี',true)}
       {field('คะแนน (ถ้ามี)','score','เช่น 8/10')}
-      {field('จุดที่ยังติด','stuck','เรื่องที่ควรทบทวนเพิ่มเติม',true)}
+      {field('จุดที่ยังติด / ควรทบทวน','stuck','เรื่องที่ควรทบทวนเพิ่มเติม',true)}
       {field('การบ้าน / สิ่งที่ต้องทำต่อ','homework','แบบฝึกหัดหรือสิ่งที่ต้องเตรียม',true)}
+      {field('แผนการเรียนคาบถัดไป','nextPlan','หัวข้อหรือทักษะที่จะต่อยอดในครั้งหน้า',true)}
       <div className="my-3 border-t pt-3" style={{borderColor:C.line}}><div className="mb-2 text-sm font-semibold" style={{color:C.pineDark}}>English details (optional)</div>
         {field('Lesson topic (EN)','enTopic','e.g. Linear equations',true)}
         {field('Learning outcome (EN)','enPerformance','What the student understood',true)}

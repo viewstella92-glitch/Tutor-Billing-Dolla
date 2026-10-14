@@ -41,14 +41,14 @@ export default function MonthlyPlanner({ students=[], schedule=[], sessions=[], 
   const cancelSlot = async row => {
     if (!updateExceptions) return;
     const entry={id:crypto.randomUUID(),slotId:row.slotId,date:row.date,status:'cancelled'};
-    await updateExceptions([...exceptions,entry]);
-    showToast?.(lang==='en'?'Lesson cancelled':'ยกเลิกคาบแล้ว');
+    const saved = await updateExceptions([...exceptions,entry]);
+    if(saved) showToast?.(lang==='en'?'Lesson cancelled':'ยกเลิกคาบแล้ว');
   };
   const undoCancel = async row => {
     if (!updateExceptions) return;
     const existing=exceptionFor(row);
-    await updateExceptions(exceptions.filter(e=>e.id!==existing?.id),existing?.id?[existing.id]:[]);
-    showToast?.(lang==='en'?'Cancellation removed':'ยกเลิกสถานะยกเลิกแล้ว');
+    const saved = await updateExceptions(exceptions.filter(e=>e.id!==existing?.id),existing?.id?[existing.id]:[]);
+    if(saved) showToast?.(lang==='en'?'Cancellation removed':'ยกเลิกสถานะยกเลิกแล้ว');
   };
   const colors = new Map(activeStudents.map((s,i)=>[s.id,PALETTE[i%PALETTE.length]]));
 

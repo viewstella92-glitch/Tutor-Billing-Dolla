@@ -30,7 +30,7 @@ function roundRectPath(ctx, x, y, w, h, r) {
   ctx.arcTo(x,y,x+rr.tl,y,rr.tl); ctx.closePath();
 }
 function parseNote(note = '') {
-  const result = { taught:'', outcome:'', score:'', stuck:'', homework:'', taughtEn:'', outcomeEn:'', stuckEn:'', homeworkEn:'', extra:[] };
+  const result = { taught:'', outcome:'', strengths:'', score:'', stuck:'', homework:'', nextPlan:'', taughtEn:'', outcomeEn:'', stuckEn:'', homeworkEn:'', extra:[] };
   String(note || '').split(/\r?\n/).forEach(raw => {
     const line = raw.trim();
     if (!line) return;
@@ -40,9 +40,11 @@ function parseNote(note = '') {
     else if (line.startsWith('EN homework:')) result.homeworkEn = line.slice('EN homework:'.length).trim();
     else if (line.startsWith('สอน:')) result.taught = line.slice('สอน:'.length).trim();
     else if (line.startsWith('ผลการเรียน:')) result.outcome = line.slice('ผลการเรียน:'.length).trim();
+    else if (line.startsWith('จุดเด่น:')) result.strengths = line.slice('จุดเด่น:'.length).trim();
     else if (line.startsWith('คะแนน:')) result.score = line.slice('คะแนน:'.length).trim();
     else if (line.startsWith('ติดขัด:')) result.stuck = line.slice('ติดขัด:'.length).trim();
     else if (line.startsWith('การบ้าน:')) result.homework = line.slice('การบ้าน:'.length).trim();
+    else if (line.startsWith('แผนคาบหน้า:')) result.nextPlan = line.slice('แผนคาบหน้า:'.length).trim();
     else result.extra.push(line);
   });
   return result;
@@ -109,7 +111,7 @@ export default function ParentReportCard({ student, sessions = [], month: initia
     change !== null && change > 0 ? 'ขึ้นมา +' + change + ' จากตอนเริ่มเรียน' : '',
     '',
     'คาบเรียนในเดือนนี้',
-    ...(parsedRecent.length ? parsedRecent.map(s=>fmtDateThai(s.date) + ' · ' + (s.parsed.taught || 'ไม่ได้ระบุเรื่องที่สอน') + (s.parsed.outcome ? ' — ' + s.parsed.outcome : '')) : ['เดือนนี้ยังไม่มีคาบสอนที่บันทึกไว้']),
+    ...(parsedRecent.length ? parsedRecent.map(s=>fmtDateThai(s.date) + ' · ' + (s.parsed.taught || 'ไม่ได้ระบุเรื่องที่สอน') + (s.parsed.outcome ? ' — ' + s.parsed.outcome : '') + (s.parsed.strengths ? ' · จุดเด่น: ' + s.parsed.strengths : '') + (s.parsed.nextPlan ? ' · คาบหน้า: ' + s.parsed.nextPlan : '')) : ['เดือนนี้ยังไม่มีคาบสอนที่บันทึกไว้']),
     tutorMessage ? '' : '',
     tutorMessage ? 'ข้อความจากติวเตอร์: ' + tutorMessage : '',
     homeworkItems.length ? 'การบ้าน: ' + homeworkItems.join(' / ') : '',
@@ -188,8 +190,10 @@ export default function ParentReportCard({ student, sessions = [], month: initia
           { text: fmtDateThai(lesson.date) + ' · ' + fmtHours(lesson.hours) + ' ชั่วโมง · ' + subject, font:'600 12px sans-serif', color:C.pine, lh:16 },
           { text: parsed.taught || 'ไม่ได้ระบุหัวข้อที่สอน', font:'600 14px sans-serif', color:C.ink, lh:19 },
           parsed.outcome && { text:'ผลการเรียน: ' + parsed.outcome, font:'400 13px sans-serif', color:C.ink, lh:18 },
-          parsed.stuck && { text:'ยังติด: ' + parsed.stuck, font:'400 12px sans-serif', color:C.gold, lh:17 },
+          parsed.strengths && { text:'จุดเด่น: ' + parsed.strengths, font:'400 12px sans-serif', color:C.pine, lh:17 },
+          parsed.stuck && { text:'ควรทบทวน: ' + parsed.stuck, font:'400 12px sans-serif', color:C.gold, lh:17 },
           parsed.homework && { text:'การบ้าน: ' + parsed.homework, font:'400 12px sans-serif', color:C.pine, lh:17 },
+          parsed.nextPlan && { text:'คาบถัดไป: ' + parsed.nextPlan, font:'400 12px sans-serif', color:C.ink, lh:17 },
         ].filter(Boolean);
         let bodyH = 0;
         const measured = items.map(item => {
