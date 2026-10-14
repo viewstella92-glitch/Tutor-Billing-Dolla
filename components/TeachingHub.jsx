@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { CalendarDays, ChevronLeft, ChevronRight, Clock3, Plus, BookOpen, Wallet, CheckCircle2, Circle, Search, X, Trash2, PencilLine, CalendarPlus, NotebookPen } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, Clock3, Plus, BookOpen, Wallet, CheckCircle2, Circle, Search, X, Trash2, PencilLine, CalendarPlus, NotebookPen, TrendingUp } from 'lucide-react';
 
 const DAYS = ['จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.', 'ส.', 'อา.'];
 const FULL_DAYS = ['จันทร์','อังคาร','พุธ','พฤหัสบดี','ศุกร์','เสาร์','อาทิตย์'];
