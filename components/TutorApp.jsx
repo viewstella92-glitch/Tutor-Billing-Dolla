@@ -236,19 +236,42 @@ export default function App() {
 
   const updateSessions = async (next, deletedIds = []) => {
     try {
+      // Persist first, then reload from Supabase before reporting success.
+      if (next.length) {
+        const { error } = await supabase.from('tutor_sessions').upsert(
+          next.map(x => ({
+            id:x.id, user_id:OWNER_ID, student_id:x.studentId||null,
+            student_name:x.studentName||'', session_date:x.date,
+            hours:Number(x.hours), rate:Number(x.rate), note:x.note||'',
+            invoiced:Boolean(x.invoiced), paid:Boolean(x.paid),
+            source_slot_id:x.sourceSlotId||null
+          })),
+          { onConflict:'id' }
+        );
+        if (error) throw error;
+      }
       for (const id of deletedIds) {
         const { error } = await supabase.from('tutor_sessions').delete().eq('id', id).eq('user_id', OWNER_ID);
         if (error) throw error;
       }
-      if (next.length) {
-        const { error } = await supabase.from('tutor_sessions').upsert(next.map(x => ({ id:x.id, user_id:OWNER_ID, student_id:x.studentId||null, student_name:x.studentName||'', session_date:x.date, hours:Number(x.hours), rate:Number(x.rate), note:x.note||'', invoiced:Boolean(x.invoiced), paid:Boolean(x.paid), source_slot_id:x.sourceSlotId||null })));
-        if (error) throw error;
-      }
-      setSessions(next);
+      const { data, error:readError } = await supabase
+        .from('tutor_sessions').select('*').eq('user_id', OWNER_ID)
+        .order('session_date', { ascending:false });
+      if (readError) throw readError;
+      const persistedIds = new Set((data||[]).map(row=>row.id));
+      const missing = next.filter(row=>!deletedIds.includes(row.id) && !persistedIds.has(row.id));
+      if (missing.length) throw new Error('Supabase did not return the saved lesson record');
+      setSessions((data||[]).map(row=>({
+        id:row.id, studentId:row.student_id, studentName:row.student_name,
+        date:row.session_date, hours:Number(row.hours), rate:Number(row.rate),
+        note:row.note||'', invoiced:Boolean(row.invoiced), paid:Boolean(row.paid),
+        sourceSlotId:row.source_slot_id||null
+      })));
+      return true;
     } catch (e) {
-      console.error(e);
-      showToast('บันทึกคาบสอนไม่สำเร็จ');
-      throw e;
+      console.error('Tutor session persistence failed:', e);
+      showToast('บันทึกไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง');
+      return false;
     }
   };
 
@@ -1381,12 +1404,16 @@ function SessionsTab({ students, sessions, updateSessions, getStudent, showToast
   const cancel=()=>{setShowForm(false);setEditing(null);};
   const save=async(item)=>{
     const exists=sessions.some(s=>s.id===item.id);
-    await updateSessions(exists?sessions.map(s=>s.id===item.id?item:s):[...sessions,item]);
-    cancel();showToast(exists?'อัปเดตบันทึกคาบแล้ว':'บันทึกคาบสอนแล้ว');
+    const next=exists?sessions.map(s=>s.id===item.id?item:s):[...sessions,item];
+    const saved=await updateSessions(next);
+    if(!saved) return;
+    cancel();
+    showToast(exists?'บันทึกการแก้ไขแล้ว':'บันทึกคาบสอนสำเร็จแล้ว');
   };
   const remove=async(id)=>{
     if(!confirm('ลบคาบสอนนี้?'))return;
-    await updateSessions(sessions.filter(s=>s.id!==id),[id]);cancel();showToast('ลบคาบสอนแล้ว');
+    const saved=await updateSessions(sessions.filter(s=>s.id!==id),[id]);
+    if(saved){cancel();showToast('ลบคาบสอนแล้ว');}
   };
   const togglePaid=s=>updateSessions(sessions.map(x=>x.id===s.id?{...x,paid:!x.paid}:x));
   return <div>
