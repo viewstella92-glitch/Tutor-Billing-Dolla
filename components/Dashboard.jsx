@@ -56,8 +56,8 @@ export default function Dashboard({students=[],schedule=[],sessions=[],exception
   if(!updateExceptions)return;
   const existing=exceptions.find(e=>e.slotId===slot.id&&e.date===today);
   if(existing)return;
-  await updateExceptions([...exceptions,{id:crypto.randomUUID(),slotId:slot.id,date:today,status:'cancelled'}]);
-  showToast?.(lang==='en'?'Lesson cancelled':'ยกเลิกคาบแล้ว');
+  const saved = await updateExceptions([...exceptions,{id:crypto.randomUUID(),slotId:slot.id,date:today,status:'cancelled'}]);
+  if(saved) showToast?.(lang==='en'?'Lesson cancelled':'ยกเลิกคาบแล้ว');
  };
  const shortcuts=[{label:t.goPlan,icon:CalendarDays,tab:'plan'},{label:t.goInvoice,icon:Receipt,tab:'invoice'},{label:t.goReports,icon:ClipboardList,tab:'progress'}];
  return <div className="space-y-5">
