@@ -100,7 +100,7 @@ export default function TeachingHub({students=[],schedule=[],sessions=[],excepti
   const removeSession=async session=>{
     const studentName=session.studentName||students.find(x=>x.id===session.studentId)?.name||'นักเรียน';
     if(!window.confirm(`ลบประวัติคาบสอนของ ${studentName} วันที่ ${session.date} ยอด ${money(Number(session.hours||0)*Number(session.rate||0))} ใช่หรือไม่? การลบนี้จะปรับยอดรายได้และสถานะค่าสอนด้วย`))return;
-    const ok=await updateSessions(sessions.filter(x=>x.id!==session.id));
+    const ok=await updateSessions(sessions.filter(x=>x.id!==session.id),[session.id]);
     if(ok!==false)showToast?.('ลบประวัติคาบสอนแล้ว');
   };
   const removeSchedule=async slot=>{if(!window.confirm('ลบตารางสอนรายการนี้?'))return;await updateSchedule(schedule.filter(x=>x.id!==slot.id),[slot.id]);};
