@@ -1,8 +1,8 @@
 import './globals.css';
 
 export const metadata = {
-  title: 'Dolla Tutor — Teaching Studio',
-  description: 'จัดการนักเรียน ตารางสอน บันทึกคาบเรียน ค่าสอน และรายงานสำหรับผู้ปกครอง',
+  title: 'Tutor Desk — Teaching Studio',
+  description: 'พื้นที่จัดการนักเรียน ตารางสอน บันทึกคาบเรียน และรายรับสำหรับติวเตอร์',
 };
 
 export default function RootLayout({ children }) {
