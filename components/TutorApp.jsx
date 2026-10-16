@@ -321,8 +321,8 @@ export default function App() {
       {/* Desktop sidebar */}
       <div style={{ borderRight: `1px solid ${C.line}` }} className="workspace-sidebar hidden md:flex md:w-60 md:flex-col md:py-7 md:px-4 md:sticky md:top-0 md:h-screen shrink-0">
         <div className="workspace-brand px-2 mb-8">
-          <div className="workspace-brand-mark">d.</div><div style={{ color: C.pine }} className="text-lg font-semibold leading-tight">Dolla Tutor</div>
-          <div style={{ color: C.inkSoft }} className="text-xs mt-1">TEACHING STUDIO · สมุดงานติวเตอร์</div>
+          <div className="workspace-brand-mark">d.</div><div style={{ color: C.pine }} className="text-lg font-semibold leading-tight">Tutor Desk</div>
+          <div style={{ color: C.inkSoft }} className="text-xs mt-1">TUTOR DESK · สมุดงานติวเตอร์</div>
         </div>
         <nav className="flex flex-col gap-2">
           {renderNavigation()}
@@ -336,7 +336,7 @@ export default function App() {
 
       <div className="workspace-main flex-1 px-4 py-4 md:px-10 md:py-7 max-w-6xl mx-auto w-full">
         <div className="workspace-topbar mb-5 flex flex-wrap items-center justify-between gap-3 border-b pb-4" style={{borderColor:C.line}}>
-          <div><div className="font-semibold" style={{color:C.pineDark}}>Tutor Billing Dolla</div><div className="text-xs mt-0.5" style={{color:C.inkSoft}}>{lang==='en'?'Tutoring and invoice workspace':'จัดการคาบสอนและใบแจ้งค่าสอน'}</div></div>
+          <div><div className="font-semibold" style={{color:C.pineDark}}>Tutor Desk</div><div className="text-xs mt-0.5" style={{color:C.inkSoft}}>{lang==='en'?'Your tutoring workspace':'จัดการนักเรียน ตารางสอน และรายรับ'}</div></div>
           <div className="flex items-center gap-2">
             <div className="inline-flex rounded-lg border p-1" style={{borderColor:C.line,background:C.surface}}><button type="button" onClick={()=>setLang('th')} className="rounded-md px-3 py-1.5 text-xs font-semibold" style={{background:lang==='th'?C.pine:C.surface,color:lang==='th'?'#fff':C.inkSoft}}>TH</button><button type="button" onClick={()=>setLang('en')} className="rounded-md px-3 py-1.5 text-xs font-semibold" style={{background:lang==='en'?C.pine:C.surface,color:lang==='en'?'#fff':C.inkSoft}}>EN</button></div>
             <button type="button" onClick={()=>setSettingsOpen(true)} className="rounded-lg border px-3 py-2 text-sm font-medium" style={{borderColor:C.line,background:C.surface}}>{lang==='en'?'Settings':'ตั้งค่า'}</button>
